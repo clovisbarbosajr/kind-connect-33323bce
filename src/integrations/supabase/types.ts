@@ -83,6 +83,128 @@ export type Database = {
         }
         Relationships: []
       }
+      categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
+      genres: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
+      movies: {
+        Row: {
+          audio_type: string | null
+          backdrop: string | null
+          category_id: string | null
+          created_at: string
+          description: string | null
+          external_id: string | null
+          genres: string[] | null
+          id: string
+          is_hero: boolean | null
+          last_sync_at: string | null
+          magnet: string | null
+          poster: string | null
+          rating: number | null
+          resolution: string | null
+          seasons: Json | null
+          size: string | null
+          slug: string
+          title: string
+          type: Database["public"]["Enums"]["content_type"] | null
+          updated_at: string
+          year: number | null
+        }
+        Insert: {
+          audio_type?: string | null
+          backdrop?: string | null
+          category_id?: string | null
+          created_at?: string
+          description?: string | null
+          external_id?: string | null
+          genres?: string[] | null
+          id?: string
+          is_hero?: boolean | null
+          last_sync_at?: string | null
+          magnet?: string | null
+          poster?: string | null
+          rating?: number | null
+          resolution?: string | null
+          seasons?: Json | null
+          size?: string | null
+          slug: string
+          title: string
+          type?: Database["public"]["Enums"]["content_type"] | null
+          updated_at?: string
+          year?: number | null
+        }
+        Update: {
+          audio_type?: string | null
+          backdrop?: string | null
+          category_id?: string | null
+          created_at?: string
+          description?: string | null
+          external_id?: string | null
+          genres?: string[] | null
+          id?: string
+          is_hero?: boolean | null
+          last_sync_at?: string | null
+          magnet?: string | null
+          poster?: string | null
+          rating?: number | null
+          resolution?: string | null
+          seasons?: Json | null
+          size?: string | null
+          slug?: string
+          title?: string
+          type?: Database["public"]["Enums"]["content_type"] | null
+          updated_at?: string
+          year?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movies_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_logs: {
         Row: {
           failed: number | null
@@ -126,6 +248,7 @@ export type Database = {
     }
     Enums: {
       content_category: "movie" | "series"
+      content_type: "movie" | "series" | "anime"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -254,6 +377,7 @@ export const Constants = {
   public: {
     Enums: {
       content_category: ["movie", "series"],
+      content_type: ["movie", "series", "anime"],
     },
   },
 } as const
