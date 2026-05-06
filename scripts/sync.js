@@ -290,7 +290,7 @@ async function run() {
         try {
           const oldUrl = page.url();
           
-          await page.evaluate(() => {
+          const nextUrl = await page.evaluate(() => {
             const nextSelectors = [
               '.pagination-next', 
               'a[rel="next"]', 
@@ -316,36 +316,46 @@ async function run() {
             }
 
             if (nextBtn) {
-              console.log('Clicando no botão de próxima página:', nextBtn.innerText);
-              nextBtn.click();
-            } else {
-              // Se não achou botão pra clicar, tenta achar um link com ?page=
-              const pageLinks = Array.from(document.querySelectorAll('a[href*="page="]'));
-              const nextPageNum = parseInt(new URL(window.location.href).searchParams.get('page') || '1') + 1;
-              const nextPageLink = pageLinks.find(a => a.getAttribute('href').includes(`page=${nextPageNum}`));
-              if (nextPageLink) {
-                console.log('Seguindo link direto para página:', nextPageNum);
-                nextPageLink.click();
+              // Se for um link (A), retorna o href absoluto
+              if (nextBtn.tagName === 'A' && nextBtn.href) {
+                return nextBtn.href;
               }
+              // Se for um botão ou não tiver href, tenta clicar
+              nextBtn.click();
+              return null;
+            } else {
+              // Fallback para URL manual baseada em parâmetro
+              const url = new URL(window.location.href);
+              const currentPageNum = parseInt(url.searchParams.get('page') || '1');
+              url.searchParams.set('page', (currentPageNum + 1).toString());
+              return url.toString();
             }
           });
 
-          // Aguardar URL mudar ou novos dados carregarem
-          await Promise.race([
-            page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20000 }),
-            page.waitForFunction((old) => window.location.href !== old, { timeout: 20000 }, oldUrl),
-            page.waitForTimeout(15000)
-          ]).catch(() => console.log('Aviso: Navegação demorou. Continuando mesmo assim.'));
+          if (nextUrl) {
+            console.log(`[Paginação] Próxima URL detectada: ${nextUrl}`);
+            await page.goto(nextUrl, { waitUntil: 'networkidle', timeout: 30000 });
+          } else {
+            console.log(`[Paginação] Clique realizado. Aguardando navegação...`);
+            // Aguardar URL mudar ou novos dados carregarem
+            await Promise.race([
+              page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20000 }),
+              page.waitForFunction((old) => window.location.href !== old, { timeout: 20000 }, oldUrl),
+              page.waitForTimeout(10000)
+            ]).catch(() => console.log('Aviso: Navegação demorou. Continuando mesmo assim.'));
+          }
           
           const newUrl = page.url();
-          if (newUrl === oldUrl) {
-            console.log('[Paginação] URL não mudou após o clique. Tentando mudar via URL manualmente...');
+          if (newUrl === oldUrl && !nextUrl) {
+            console.log('[Paginação] URL não mudou após o clique. Tentando mudança manual via URL...');
             const urlObj = new URL(oldUrl);
-            urlObj.searchParams.set('page', (currentPage + 1).toString());
+            const nextPage = currentPage + 1;
+            urlObj.searchParams.set('page', nextPage.toString());
+            console.log(`[Paginação] Navegando manualmente para: ${urlObj.toString()}`);
             await page.goto(urlObj.toString(), { waitUntil: 'networkidle' });
           }
 
-          await page.waitForTimeout(5000); // Pausa para renderização JS (importante para window.buttonLinks)
+          await page.waitForTimeout(5000); // Pausa essencial para renderização JS e window.buttonLinks
           currentPage++;
         } catch (e) {
           console.log('Erro na navegação de próxima página:', e.message);
