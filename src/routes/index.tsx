@@ -26,6 +26,8 @@ function Index() {
     const from = currentPage * 20;
     const to = from + 19;
 
+    console.log(`[Frontend] Tentando buscar dados... (Página: ${currentPage}, Filtro: ${activeFilter})`);
+    
     let query = supabase
       .from('movies')
       .select('*', { count: 'exact' })
