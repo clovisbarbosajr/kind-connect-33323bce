@@ -17,10 +17,7 @@ function Index() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<'all' | 'movie' | 'series' | 'anime'>('all');
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
   const [dbStatus, setDbStatus] = useState<{count: number, lastSync: string | null}>({count: 0, lastSync: null});
-  const observer = useRef<IntersectionObserver | null>(null);
 
   const fetchData = useCallback(async () => {
     console.log('[Frontend] Executando query: select * from movies limit 20');
