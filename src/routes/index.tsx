@@ -14,6 +14,7 @@ type Movie = Tables<"movies">;
 function Index() {
   const [catalog, setCatalog] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<'all' | 'movie' | 'series' | 'anime'>('all');
   const [page, setPage] = useState(0);
