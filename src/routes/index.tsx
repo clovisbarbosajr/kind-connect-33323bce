@@ -53,7 +53,7 @@ function Index() {
             <div style={{ border: '1px solid #333', borderRadius: '8px', overflow: 'hidden' }}>
               <img 
                 src={movie.backdrop || movie.poster} 
-                style={{ width: '100%', aspectRatio: '16/9', objectCover: 'cover' }} 
+                style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover' }} 
                 alt=""
               />
               <div style={{ padding: '10px' }}>
