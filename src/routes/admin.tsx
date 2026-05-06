@@ -14,6 +14,7 @@ interface SyncLog {
   finished_at: string | null;
   imported: number;
   updated: number;
+  ignored: number;
   failed: number;
   status: 'running' | 'success' | 'error';
   raw_error: string | null;
@@ -176,6 +177,7 @@ function AdminDashboard() {
                   <th className="px-6 py-4">URL Base</th>
                   <th className="px-6 py-4 text-center">Importados</th>
                   <th className="px-6 py-4 text-center">Atualizados</th>
+                  <th className="px-6 py-4 text-center">Ignorados</th>
                   <th className="px-6 py-4 text-center">Falhas</th>
                   <th className="px-6 py-4 text-center">Ações</th>
                 </tr>
@@ -218,6 +220,7 @@ function AdminDashboard() {
                       </td>
                       <td className="px-6 py-4 text-center font-bold text-neon-green">{log.imported}</td>
                       <td className="px-6 py-4 text-center font-bold">{log.updated}</td>
+                      <td className="px-6 py-4 text-center font-bold text-muted-foreground">{log.ignored}</td>
                       <td className="px-6 py-4 text-center font-bold text-red-500">{log.failed}</td>
                       <td className="px-6 py-4 text-center">
                         {log.artifact_path && (
