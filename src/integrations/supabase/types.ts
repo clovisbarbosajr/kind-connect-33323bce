@@ -138,6 +138,8 @@ export type Database = {
       }
       sync_logs: {
         Row: {
+          created_at: string | null
+          duration_seconds: number | null
           failed: number | null
           finished_at: string | null
           id: string
@@ -148,6 +150,8 @@ export type Database = {
           updated: number | null
         }
         Insert: {
+          created_at?: string | null
+          duration_seconds?: number | null
           failed?: number | null
           finished_at?: string | null
           id?: string
@@ -158,6 +162,8 @@ export type Database = {
           updated?: number | null
         }
         Update: {
+          created_at?: string | null
+          duration_seconds?: number | null
           failed?: number | null
           finished_at?: string | null
           id?: string
