@@ -14,16 +14,76 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      catalog: {
+        Row: {
+          audio_type: string | null
+          backdrop: string | null
+          category: Database["public"]["Enums"]["content_category"]
+          created_at: string
+          description: string | null
+          genres: string[] | null
+          id: string
+          magnet: string | null
+          poster: string | null
+          rating: number | null
+          resolution: string | null
+          size: string | null
+          slug: string
+          title: string
+          type: string | null
+          updated_at: string
+          year: number | null
+        }
+        Insert: {
+          audio_type?: string | null
+          backdrop?: string | null
+          category?: Database["public"]["Enums"]["content_category"]
+          created_at?: string
+          description?: string | null
+          genres?: string[] | null
+          id?: string
+          magnet?: string | null
+          poster?: string | null
+          rating?: number | null
+          resolution?: string | null
+          size?: string | null
+          slug: string
+          title: string
+          type?: string | null
+          updated_at?: string
+          year?: number | null
+        }
+        Update: {
+          audio_type?: string | null
+          backdrop?: string | null
+          category?: Database["public"]["Enums"]["content_category"]
+          created_at?: string
+          description?: string | null
+          genres?: string[] | null
+          id?: string
+          magnet?: string | null
+          poster?: string | null
+          rating?: number | null
+          resolution?: string | null
+          size?: string | null
+          slug?: string
+          title?: string
+          type?: string | null
+          updated_at?: string
+          year?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
-      [_ in never]: never
+      content_category: "movie" | "series"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +210,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      content_category: ["movie", "series"],
+    },
   },
 } as const
