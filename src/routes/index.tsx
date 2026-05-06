@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, Play, Star, Clock, Flame, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { seedCatalog } from "@/lib/seed";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -31,17 +30,16 @@ function Index() {
 
   useEffect(() => {
     const fetchData = async () => {
-      // @ts-ignore - Catalog table newly created
-      const { data, error } = await supabase.from('catalog').select('*');
-      if (error) console.error(error);
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('catalog')
+        .select('*')
+        .order('created_at', { ascending: false });
       
-      if (!data || data.length === 0) {
-        await seedCatalog();
-        // @ts-ignore
-        const { data: newData } = await supabase.from('catalog').select('*');
-        setCatalog((newData as ContentItem[]) || []);
+      if (error) {
+        console.error('Error fetching catalog:', error);
       } else {
-        setCatalog(data as ContentItem[]);
+        setCatalog((data as ContentItem[]) || []);
       }
       setLoading(false);
     };
@@ -139,12 +137,9 @@ function Index() {
               transition={{ delay: 0.4 }}
               className="flex items-center gap-4 mt-4"
             >
-              <button className="neon-button flex items-center gap-2">
+              <Link to="/watch/$slug" params={{ slug: heroItem.slug }} className="neon-button flex items-center gap-2">
                 <Play className="w-5 h-5 fill-current" /> Assistir Agora
-              </button>
-              <button className="bg-secondary/80 backdrop-blur-md border border-white/10 hover:bg-secondary px-6 py-2 rounded-full font-bold transition-all">
-                Mais Detalhes
-              </button>
+              </Link>
             </motion.div>
           </div>
         </section>
@@ -178,45 +173,50 @@ function Section({ title, items }: { title: string, items: ContentItem[] }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <AnimatePresence>
           {items.map((item) => (
-            <motion.div 
+            <Link 
               key={item.id}
-              layout
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              whileHover={{ y: -5 }}
+              to="/watch/$slug"
+              params={{ slug: item.slug }}
               className="glass-card rounded-xl overflow-hidden cursor-pointer group flex flex-col h-full"
             >
-              <div className="relative aspect-video overflow-hidden">
-                <img 
-                  src={item.backdrop || ""} 
-                  alt={item.title} 
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <div className="w-12 h-12 rounded-full bg-neon-green flex items-center justify-center text-primary-foreground shadow-[0_0_15px_rgba(200,255,0,0.5)]">
-                    <Play className="w-6 h-6 fill-current" />
+              <motion.div 
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                whileHover={{ y: -5 }}
+              >
+                <div className="relative aspect-video overflow-hidden">
+                  <img 
+                    src={item.backdrop || ""} 
+                    alt={item.title} 
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-neon-green flex items-center justify-center text-primary-foreground shadow-[0_0_15px_rgba(200,255,0,0.5)]">
+                      <Play className="w-6 h-6 fill-current" />
+                    </div>
+                  </div>
+                  <div className="absolute top-3 right-3 flex flex-col gap-2">
+                    <span className="bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold border border-white/10 uppercase">{item.resolution}</span>
                   </div>
                 </div>
-                <div className="absolute top-3 right-3 flex flex-col gap-2">
-                  <span className="bg-black/60 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold border border-white/10 uppercase">{item.resolution}</span>
+                
+                <div className="p-4 flex-1 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold truncate text-lg group-hover:text-neon-green transition-colors">{item.title}</h4>
+                    <span className="text-neon-green text-sm flex items-center gap-1 font-bold">
+                      <Star className="w-3 h-3 fill-neon-green" /> {item.rating}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{item.year}</span>
+                    <span>•</span>
+                    <span>{item.genres?.join(", ")}</span>
+                  </div>
                 </div>
-              </div>
-              
-              <div className="p-4 flex-1 flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold truncate text-lg group-hover:text-neon-green transition-colors">{item.title}</h4>
-                  <span className="text-neon-green text-sm flex items-center gap-1 font-bold">
-                    <Star className="w-3 h-3 fill-neon-green" /> {item.rating}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{item.year}</span>
-                  <span>•</span>
-                  <span>{item.genres?.join(", ")}</span>
-                </div>
-              </div>
-            </motion.div>
+              </motion.div>
+            </Link>
           ))}
         </AnimatePresence>
       </div>
