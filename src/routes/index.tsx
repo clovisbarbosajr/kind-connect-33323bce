@@ -29,42 +29,55 @@ function Index() {
 
     console.log(`[Frontend] Tentando buscar dados... (Página: ${currentPage}, Filtro: ${activeFilter})`);
     
-    let query = supabase
-      .from('movies')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to);
-    
-    if (activeFilter !== 'all') {
-      query = query.eq('type', activeFilter);
-    }
-
-    if (searchTerm) {
-      query = query.ilike('title', `%${searchTerm}%`);
-    }
-
-    console.log(`[Frontend] Fetching page ${currentPage} (range ${from}-${to}), Filter: ${activeFilter}, Search: ${searchTerm}`);
-    const { data, error: fetchError, count, status } = await query;
-    
-    if (fetchError) {
-      console.error('[Frontend] Error fetching catalog:', fetchError);
-      setError(fetchError.message);
-    } else {
-      setError(null);
-      console.log(`[Frontend] Received ${data?.length || 0} items. Total count in DB: ${count}. Status: ${status}`);
-      if (data && data.length > 0) {
-        console.log('[Frontend] First item payload:', JSON.stringify(data[0], null, 2));
-      }
+    try {
+      let query = supabase
+        .from('movies')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
       
-      if (isInitial) {
-        setCatalog(data || []);
-      } else {
-        setCatalog(prev => [...prev, ...(data || [])]);
+      if (activeFilter !== 'all') {
+        query = query.eq('type', activeFilter);
       }
-      setHasMore(data?.length === 20);
-      if (count !== null) setDbStatus(prev => ({...prev, count}));
+
+      if (searchTerm) {
+        query = query.ilike('title', `%${searchTerm}%`);
+      }
+
+      console.log(`[Frontend] Requesting Supabase: Range ${from}-${to}, Filter: ${activeFilter}, Search: ${searchTerm}`);
+      const { data, error: fetchError, count, status } = await query;
+      
+      console.log(`[Frontend] Supabase Response: status=${status}, dataLength=${data?.length}, error=`, fetchError);
+
+      if (fetchError) {
+        console.error('[Frontend] Error fetching catalog:', fetchError);
+        setError(`Erro Supabase: ${fetchError.message} (${fetchError.code})`);
+      } else {
+        setError(null);
+        if (data && data.length > 0) {
+          console.log('[Frontend] Exemplo do payload (primeiro item):', {
+            id: data[0].id,
+            title: data[0].title,
+            poster: data[0].poster ? 'presente' : 'ausente',
+            backdrop: data[0].backdrop ? 'presente' : 'ausente'
+          });
+        }
+        
+        if (isInitial) {
+          setCatalog(data || []);
+        } else {
+          setCatalog(prev => [...prev, ...(data || [])]);
+        }
+        setHasMore(data?.length === 20);
+        if (count !== null) setDbStatus(prev => ({...prev, count}));
+      }
+    } catch (err: any) {
+      console.error('[Frontend] Exception in fetchData:', err);
+      setError(`Erro inesperado: ${err.message || 'Falha na requisição'}`);
+    } finally {
+      setLoading(false);
+      console.log('[Frontend] Loading finalizado.');
     }
-    setLoading(false);
   }, [activeFilter, searchTerm, page]);
 
   // Check DB status on mount
