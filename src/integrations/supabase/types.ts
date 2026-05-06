@@ -35,6 +35,44 @@ export type Database = {
         }
         Relationships: []
       }
+      episodes: {
+        Row: {
+          created_at: string
+          episode_number: number
+          id: string
+          quality: string | null
+          season_id: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          episode_number: number
+          id?: string
+          quality?: string | null
+          season_id: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          episode_number?: number
+          id?: string
+          quality?: string | null
+          season_id?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "episodes_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       genres: {
         Row: {
           created_at: string
@@ -136,6 +174,38 @@ export type Database = {
           },
         ]
       }
+      seasons: {
+        Row: {
+          created_at: string
+          id: string
+          season_number: number
+          title_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          season_number: number
+          title_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          season_number?: number
+          title_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seasons_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: false
+            referencedRelation: "titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sync_logs: {
         Row: {
           artifact_path: string | null
@@ -205,6 +275,33 @@ export type Database = {
         }
         Relationships: []
       }
+      sync_sources: {
+        Row: {
+          id: string
+          imported_count: number | null
+          page_number: number | null
+          source_type: string
+          source_url: string
+          synced_at: string
+        }
+        Insert: {
+          id?: string
+          imported_count?: number | null
+          page_number?: number | null
+          source_type: string
+          source_url: string
+          synced_at?: string
+        }
+        Update: {
+          id?: string
+          imported_count?: number | null
+          page_number?: number | null
+          source_type?: string
+          source_url?: string
+          synced_at?: string
+        }
+        Relationships: []
+      }
       system_health: {
         Row: {
           created_at: string
@@ -231,6 +328,144 @@ export type Database = {
           status?: string
         }
         Relationships: []
+      }
+      title_genres: {
+        Row: {
+          genre_id: string
+          title_id: string
+        }
+        Insert: {
+          genre_id: string
+          title_id: string
+        }
+        Update: {
+          genre_id?: string
+          title_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "title_genres_genre_id_fkey"
+            columns: ["genre_id"]
+            isOneToOne: false
+            referencedRelation: "genres"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "title_genres_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: false
+            referencedRelation: "titles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      titles: {
+        Row: {
+          backdrop: string | null
+          category: string | null
+          created_at: string
+          external_id: string
+          id: string
+          imdb_rating: number | null
+          poster: string | null
+          slug: string
+          source_url: string | null
+          synopsis: string | null
+          title: string
+          type: string
+          updated_at: string
+          year: number | null
+        }
+        Insert: {
+          backdrop?: string | null
+          category?: string | null
+          created_at?: string
+          external_id: string
+          id?: string
+          imdb_rating?: number | null
+          poster?: string | null
+          slug: string
+          source_url?: string | null
+          synopsis?: string | null
+          title: string
+          type: string
+          updated_at?: string
+          year?: number | null
+        }
+        Update: {
+          backdrop?: string | null
+          category?: string | null
+          created_at?: string
+          external_id?: string
+          id?: string
+          imdb_rating?: number | null
+          poster?: string | null
+          slug?: string
+          source_url?: string | null
+          synopsis?: string | null
+          title?: string
+          type?: string
+          updated_at?: string
+          year?: number | null
+        }
+        Relationships: []
+      }
+      torrent_options: {
+        Row: {
+          audio_type: string | null
+          codec: string | null
+          created_at: string
+          episode_id: string | null
+          id: string
+          language: string | null
+          magnet: string
+          quality: string | null
+          size: string | null
+          title_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          audio_type?: string | null
+          codec?: string | null
+          created_at?: string
+          episode_id?: string | null
+          id?: string
+          language?: string | null
+          magnet: string
+          quality?: string | null
+          size?: string | null
+          title_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          audio_type?: string | null
+          codec?: string | null
+          created_at?: string
+          episode_id?: string | null
+          id?: string
+          language?: string | null
+          magnet?: string
+          quality?: string | null
+          size?: string | null
+          title_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "torrent_options_episode_id_fkey"
+            columns: ["episode_id"]
+            isOneToOne: false
+            referencedRelation: "episodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "torrent_options_title_id_fkey"
+            columns: ["title_id"]
+            isOneToOne: false
+            referencedRelation: "titles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
