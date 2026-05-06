@@ -5,11 +5,14 @@ import fs from 'fs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const INITIAL_FULL_SYNC = process.env.INITIAL_FULL_SYNC === 'true';
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('ERRO: Variáveis de ambiente SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configuradas.');
   process.exit(1);
 }
+
+console.log(`MODO DE SINCRONIZAÇÃO: ${INITIAL_FULL_SYNC ? 'IMPORTAÇÃO COMPLETA' : 'SINCRONIZAÇÃO INCREMENTAL'}`);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
@@ -167,53 +170,90 @@ async function run() {
     await saveArtifact(page, 'step3-catalog-loaded', 'png');
     await saveArtifact(page, 'step3-catalog-html', 'html');
 
-    // PASSO 4: Extração de Dados
-    console.log('[4/5] Extraindo títulos...');
-    const data = await page.evaluate(() => {
-      const items = window.buttonLinks || [];
-      const posters = window.imgBk || [];
-      const domCards = document.querySelectorAll('.card-movie, .item-movie, [class*="card"]');
-      return { 
-        count: items.length, 
-        titles: items.slice(0, 5).map(i => i.title),
-        items,
-        posters,
-        domCount: domCards.length
-      };
-    });
-
-    console.log(`Cards encontrados (window.buttonLinks): ${data.count}`);
-    console.log(`Cards encontrados (DOM): ${data.domCount}`);
+    // PASSO 4: Extração de Dados com Paginação
+    console.log('[4/5] Iniciando extração de títulos...');
     
-    if (data.count === 0 && data.domCount === 0) {
-      console.error('ERRO: Nenhum título encontrado no catálogo.');
+    const allMovieItems = [];
+    let currentPage = 1;
+    const maxPages = INITIAL_FULL_SYNC ? 500 : 3; // Limite de 3 páginas para incremental
+    let hasNextPage = true;
+
+    while (hasNextPage && currentPage <= maxPages) {
+      console.log(`\n--- Extraindo Página ${currentPage} ---`);
+      
+      // Aguardar os dados estarem disponíveis na window
+      await page.waitForFunction(() => window.buttonLinks && window.buttonLinks.length > 0, { timeout: 15000 }).catch(() => {
+        console.log('Aviso: window.buttonLinks não carregou nesta página.');
+      });
+
+      const pageData = await page.evaluate(() => {
+        const items = window.buttonLinks || [];
+        const posters = window.imgBk || [];
+        const titles = items.map(i => i.title);
+        
+        // Tentar encontrar botão de próxima página
+        // Padrões comuns: .pagination-next, a[rel="next"], ou botão que contém "Próxim" ou ">"
+        const nextBtn = document.querySelector('.pagination-next, a[rel="next"], .next-page, .next');
+        const hasNext = !!nextBtn;
+        
+        return { items, posters, hasNext, titles: titles.slice(0, 5) };
+      });
+
+      console.log(`Página ${currentPage}: ${pageData.items.length} títulos encontrados.`);
+      console.log(`Exemplos: ${pageData.titles.join(', ')}`);
+
+      // Transformar para o formato do banco
+      const movieItems = pageData.items.map((item, i) => {
+        const magnet = item.btnInfo?.[0]?.url || '';
+        const magnetHash = magnet.match(/btih:([a-zA-Z0-9]+)/)?.[1]?.toLowerCase() || `slug-${generateSlug(item.title)}`;
+        
+        return {
+          title: item.title,
+          slug: generateSlug(item.title),
+          external_id: magnetHash,
+          poster: item.poster || '',
+          backdrop: pageData.posters[i] || item.poster || '',
+          magnet: magnet,
+          rating: parseFloat(item.rating) || 8.0,
+          year: parseInt(item.year) || 2024,
+          type: (item.category === 'tv' || item.title.toLowerCase().includes('série')) ? 'series' : 'movie',
+        };
+      });
+
+      allMovieItems.push(...movieItems);
+      console.log(`Total acumulado: ${allMovieItems.length} títulos.`);
+
+      if (pageData.hasNext && currentPage < maxPages) {
+        console.log('Navegando para próxima página...');
+        try {
+          await page.evaluate(() => {
+            const nextBtn = document.querySelector('.pagination-next, a[rel="next"], .next-page, .next');
+            if (nextBtn) nextBtn.click();
+          });
+          await page.waitForLoadState('networkidle');
+          await page.waitForTimeout(3000); // Segurança para renderização
+          currentPage++;
+        } catch (e) {
+          console.log('Erro ao navegar para próxima página:', e.message);
+          hasNextPage = false;
+        }
+      } else {
+        hasNextPage = false;
+        console.log('Fim das páginas ou limite atingido.');
+      }
+    }
+
+    if (allMovieItems.length === 0) {
+      console.error('ERRO: Nenhum título encontrado em nenhuma página.');
       await saveArtifact(page, 'error-empty-catalog', 'png');
       process.exit(1);
     }
 
-    console.log('Primeiros 5 títulos encontrados:', data.titles);
-
     // PASSO 5: Inserção no Banco
-    console.log('[5/5] Preparando dados para o Supabase...');
-    const movieItems = data.items.map((item, i) => {
-      const magnet = item.btnInfo?.[0]?.url || '';
-      const magnetHash = magnet.match(/btih:([a-zA-Z0-9]+)/)?.[1]?.toLowerCase() || `slug-${generateSlug(item.title)}`;
-      
-      return {
-        title: item.title,
-        slug: generateSlug(item.title),
-        external_id: magnetHash,
-        poster: item.poster || '',
-        backdrop: data.posters[i] || item.poster || '',
-        magnet: magnet,
-        rating: parseFloat(item.rating) || 8.0,
-        year: parseInt(item.year) || 2024,
-        type: (item.category === 'tv' || item.title.toLowerCase().includes('série')) ? 'series' : 'movie',
-      };
-    });
+    console.log(`\n[5/5] Preparando inserção de ${allMovieItems.length} títulos...`);
+    
+    const movieItems = allMovieItems;
 
-    console.log(`Total de títulos detectados: ${movieItems.length}`);
-    console.log('Primeiros 5 títulos prontos para insert:', JSON.stringify(movieItems.slice(0, 5), null, 2));
 
     const BATCH_SIZE = 20;
     let imported = 0;
