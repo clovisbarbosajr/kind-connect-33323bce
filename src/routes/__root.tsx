@@ -7,6 +7,9 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+
 
 import appCss from "../styles.css?url";
 
@@ -114,6 +117,46 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  useEffect(() => {
+    const runDiagnostics = async () => {
+      console.log('--- DIAGNÓSTICO DE INICIALIZAÇÃO ---');
+      console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
+      
+      try {
+        const { count, error } = await supabase.from('movies').select('*', { count: 'exact', head: true });
+        if (error) throw error;
+        
+        console.log('Conexão Supabase: OK');
+        console.log('Total de filmes no banco:', count);
+        
+        // Log health status
+        await supabase.from('system_health').insert({
+          source: 'frontend',
+          status: 'online',
+          message: 'Frontend conectado e sincronizado',
+          metadata: {
+            url: import.meta.env.VITE_SUPABASE_URL,
+            movie_count: count,
+            user_agent: navigator.userAgent
+          }
+        });
+      } catch (err: any) {
+        console.error('ERRO DE CONEXÃO SUPABASE:', err.message);
+        // Tentar logar o erro se possível
+        try {
+          await supabase.from('system_health').insert({
+            source: 'frontend',
+            status: 'error',
+            message: `Falha na conexão: ${err.message}`,
+            metadata: { url: import.meta.env.VITE_SUPABASE_URL }
+          });
+        } catch (e) {}
+      }
+    };
+
+    runDiagnostics();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
