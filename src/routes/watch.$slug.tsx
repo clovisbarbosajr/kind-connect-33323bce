@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Play, Star, Calendar, Info, Download, ArrowLeft, Loader2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { Play, Star, Calendar, Info, Download, ArrowLeft, Loader2, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import TorrentPlayer from "@/components/TorrentPlayer";
 
 export const Route = createFileRoute("/watch/$slug")({
   component: ContentPlayer,
