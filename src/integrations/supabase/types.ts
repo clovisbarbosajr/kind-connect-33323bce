@@ -138,9 +138,12 @@ export type Database = {
       }
       sync_logs: {
         Row: {
+          artifact_path: string | null
+          base_url: string | null
           created_at: string | null
           duration_seconds: number | null
           failed: number | null
+          failed_at_step: string | null
           finished_at: string | null
           id: string
           imported: number | null
@@ -150,9 +153,12 @@ export type Database = {
           updated: number | null
         }
         Insert: {
+          artifact_path?: string | null
+          base_url?: string | null
           created_at?: string | null
           duration_seconds?: number | null
           failed?: number | null
+          failed_at_step?: string | null
           finished_at?: string | null
           id?: string
           imported?: number | null
@@ -162,9 +168,12 @@ export type Database = {
           updated?: number | null
         }
         Update: {
+          artifact_path?: string | null
+          base_url?: string | null
           created_at?: string | null
           duration_seconds?: number | null
           failed?: number | null
+          failed_at_step?: string | null
           finished_at?: string | null
           id?: string
           imported?: number | null
@@ -172,6 +181,24 @@ export type Database = {
           started_at?: string
           status?: string | null
           updated?: number | null
+        }
+        Relationships: []
+      }
+      sync_settings: {
+        Row: {
+          key: string
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string | null
+          value?: string
         }
         Relationships: []
       }
