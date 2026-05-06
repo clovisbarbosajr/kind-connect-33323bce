@@ -146,9 +146,9 @@ function Index() {
 
       {/* Main Content Sections */}
       <main className="container mx-auto px-6 -mt-20 relative z-10 space-y-12 pb-20">
-        <Section title="Recém Adicionados" items={filteredCatalog} />
-        <Section title="Séries Imperdíveis" items={filteredCatalog.filter(i => i.category === 'series')} />
-        <Section title="Filmes de Sucesso" items={filteredCatalog.filter(i => i.category === 'movie')} />
+        <Section title="Lançamentos" items={filteredCatalog.slice(0, 10)} />
+        <Section title="Filmes" items={filteredCatalog.filter(i => i.category === 'movie')} />
+        <Section title="Séries" items={filteredCatalog.filter(i => i.category === 'series')} />
       </main>
     </div>
   );
