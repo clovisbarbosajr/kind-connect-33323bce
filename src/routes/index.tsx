@@ -236,7 +236,14 @@ const MovieCard = ({ item, ref }: { item: Movie, ref: any }) => {
   return (
     <Link to="/watch/$slug" params={{ slug: item.slug }} className="group relative flex flex-col h-full" ref={ref}>
       <motion.div layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} whileHover={{ y: -8 }} className="relative aspect-[2/3] rounded-xl overflow-hidden bg-white/5 border border-white/5 transition-all duration-300 group-hover:border-neon-green/50">
-        <img src={item.poster || ""} alt={item.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+        {item.poster ? (
+          <img src={item.poster} alt={item.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 gap-2">
+            <Film className="w-8 h-8 text-white/20" />
+            <span className="text-[8px] text-white/40 uppercase font-black px-2 text-center">{item.title}</span>
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all flex flex-col justify-end p-4">
            <div className="flex items-center justify-center w-full h-full absolute top-0 left-0">
               <div className="w-12 h-12 rounded-full bg-neon-green flex items-center justify-center text-black scale-0 group-hover:scale-100 transition-transform duration-500 shadow-[0_0_20px_rgba(200,255,0,0.5)]">
@@ -245,14 +252,14 @@ const MovieCard = ({ item, ref }: { item: Movie, ref: any }) => {
            </div>
         </div>
         <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10 text-[10px] font-bold text-neon-green">
-          <Star size={10} fill="currentColor" /> {item.rating}
+          <Star size={10} fill="currentColor" /> {item.rating || 'N/A'}
         </div>
       </motion.div>
       <div className="mt-4 space-y-1">
         <h4 className="font-bold text-sm truncate group-hover:text-neon-green transition-colors uppercase">{item.title}</h4>
         <div className="flex items-center justify-between text-[10px] text-muted-foreground font-black uppercase tracking-widest">
-          <span>{item.audio_type}</span>
-          <span className="text-white/40">{item.year}</span>
+          <span>{item.audio_type || 'Dub/Leg'}</span>
+          <span className="text-white/40">{item.year || '2024'}</span>
         </div>
       </div>
     </Link>
