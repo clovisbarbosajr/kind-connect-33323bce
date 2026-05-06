@@ -50,7 +50,12 @@ async function run() {
   try {
     // PASSO 0: Desativar animações para evitar "element is not stable"
     await page.addStyleTag({
-      content: `* { transition: none !important; animation: none !important; transition-duration: 0s !important; animation-duration: 0s !important; }`
+      content: `* { 
+        transition: none !important; 
+        animation: none !important; 
+        transition-duration: 0s !important; 
+        animation-duration: 0s !important; 
+      }`
     });
 
     // PASSO 1: Acesso Inicial
@@ -62,27 +67,53 @@ async function run() {
     console.log('[2/5] Iniciando fluxo de bypass...');
     
     // Botão #alert
-    const alertBtn = page.locator('#alert');
-    if (await alertBtn.isVisible()) {
-      await alertBtn.click({ force: true });
-      console.log('Botão "IR PARA O NOVO DOMÍNIO" clicado.');
-    } else {
-      // Tentar clique via evaluate se não estiver visível ou falhar
-      await page.evaluate(() => document.querySelector('#alert')?.click());
+    console.log('Tentando clicar em #alert...');
+    await page.evaluate(() => {
+      const el = document.querySelector('#alert');
+      if (el) el.click();
+    });
+    // Fallback com force: true
+    try {
+      await page.locator('#alert').click({ force: true, timeout: 5000 });
+    } catch (e) {
+      console.log('#alert click fallback (may have already clicked):', e.message);
     }
+    console.log('Botão "IR PARA O NOVO DOMÍNIO" processado.');
 
     // Botão "Próximo"
+    console.log('Aguardando botão "Próximo"...');
     const proximoBtn = page.getByRole('button', { name: 'Próximo' });
     await proximoBtn.waitFor({ state: 'visible', timeout: 15000 });
     await saveArtifact(page, 'step2-modal-analise', 'png');
-    await proximoBtn.click({ force: true });
-    console.log('Botão "Próximo" clicado.');
+    
+    await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const btn = buttons.find(b => b.innerText.includes('Próximo'));
+      if (btn) btn.click();
+    });
+    try {
+      await proximoBtn.click({ force: true, timeout: 5000 });
+    } catch (e) {
+      console.log('"Próximo" click fallback:', e.message);
+    }
+    console.log('Botão "Próximo" processado.');
 
     // Botão "OK"
+    console.log('Aguardando botão "OK"...');
     const okBtn = page.getByRole('button', { name: 'OK' });
     await okBtn.waitFor({ state: 'visible', timeout: 30000 });
-    await okBtn.click({ force: true });
-    console.log('Botão "OK" clicado.');
+    
+    await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const btn = buttons.find(b => b.innerText.includes('OK'));
+      if (btn) btn.click();
+    });
+    try {
+      await okBtn.click({ force: true, timeout: 5000 });
+    } catch (e) {
+      console.log('"OK" click fallback:', e.message);
+    }
+    console.log('Botão "OK" processado.');
     console.log('Fluxo de bypass concluído.');
 
     // PASSO 3: Navegação Catálogo
