@@ -170,7 +170,7 @@ function Index() {
               {heroItem.title}
             </motion.h2>
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="flex items-center gap-6 text-sm font-bold">
-              <span className="flex items-center gap-1.5 text-neon-green"><Star className="w-4 h-4 fill-neon-green" /> {heroItem.rating}</span>
+              <span className="flex items-center gap-1.5 text-neon-green"><Star className="w-4 h-4 fill-neon-green" /> {heroItem.rating || 'N/A'}</span>
               <span className="text-white/60">{heroItem.year}</span>
               <span className="bg-white/10 px-3 py-1 rounded text-[10px] border border-white/10 uppercase tracking-widest">{heroItem.resolution}</span>
             </motion.div>
