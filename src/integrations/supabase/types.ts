@@ -21,12 +21,15 @@ export type Database = {
           category: Database["public"]["Enums"]["content_category"]
           created_at: string
           description: string | null
+          external_id: string | null
           genres: string[] | null
           id: string
+          last_sync_at: string | null
           magnet: string | null
           poster: string | null
           rating: number | null
           resolution: string | null
+          seasons: Json | null
           size: string | null
           slug: string
           title: string
@@ -40,12 +43,15 @@ export type Database = {
           category?: Database["public"]["Enums"]["content_category"]
           created_at?: string
           description?: string | null
+          external_id?: string | null
           genres?: string[] | null
           id?: string
+          last_sync_at?: string | null
           magnet?: string | null
           poster?: string | null
           rating?: number | null
           resolution?: string | null
+          seasons?: Json | null
           size?: string | null
           slug: string
           title: string
@@ -59,18 +65,54 @@ export type Database = {
           category?: Database["public"]["Enums"]["content_category"]
           created_at?: string
           description?: string | null
+          external_id?: string | null
           genres?: string[] | null
           id?: string
+          last_sync_at?: string | null
           magnet?: string | null
           poster?: string | null
           rating?: number | null
           resolution?: string | null
+          seasons?: Json | null
           size?: string | null
           slug?: string
           title?: string
           type?: string | null
           updated_at?: string
           year?: number | null
+        }
+        Relationships: []
+      }
+      sync_logs: {
+        Row: {
+          failed: number | null
+          finished_at: string | null
+          id: string
+          imported: number | null
+          raw_error: string | null
+          started_at: string
+          status: string | null
+          updated: number | null
+        }
+        Insert: {
+          failed?: number | null
+          finished_at?: string | null
+          id?: string
+          imported?: number | null
+          raw_error?: string | null
+          started_at?: string
+          status?: string | null
+          updated?: number | null
+        }
+        Update: {
+          failed?: number | null
+          finished_at?: string | null
+          id?: string
+          imported?: number | null
+          raw_error?: string | null
+          started_at?: string
+          status?: string | null
+          updated?: number | null
         }
         Relationships: []
       }
