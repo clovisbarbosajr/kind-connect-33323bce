@@ -1,5 +1,5 @@
-const { chromium } = require('playwright');
-const { createClient } = require('@supabase/supabase-js');
+import { chromium } from 'playwright';
+import { createClient } from '@supabase/supabase-js';
 
 // DOMÍNIO REAL ATUALIZADO
 const TARGET_URL = 'https://acesso-starck.com/catalog/all'; 
@@ -27,18 +27,27 @@ function generateSlug(title) {
 async function run() {
   const startTime = Date.now();
   console.log('--- INICIANDO SINCRONIZAÇÃO (PLAYWRIGHT) ---');
+  console.log(`Timestamp: ${new Date().toISOString()}`);
   
-  const { data: logEntry } = await supabase
-    .from('sync_logs')
-    .insert({ status: 'running', started_at: new Date().toISOString() })
-    .select()
-    .single();
+  let logId = null;
+  try {
+    const { data: logEntry, error: logError } = await supabase
+      .from('sync_logs')
+      .insert({ status: 'running', started_at: new Date().toISOString() })
+      .select()
+      .single();
+    
+    if (logError) console.error('Erro ao criar log:', logError.message);
+    logId = logEntry?.id;
+  } catch (e) {
+    console.error('Erro ao registrar início no Supabase:', e.message);
+  }
 
-  const logId = logEntry?.id;
   let imported = 0;
   let updated = 0;
   let failed = 0;
 
+  console.log('Lançando navegador...');
   const browser = await chromium.launch({ 
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
@@ -53,47 +62,81 @@ async function run() {
 
   try {
     console.log(`[1/4] Acessando URL: ${TARGET_URL}`);
-    await page.goto(TARGET_URL, { waitUntil: 'networkidle', timeout: 60000 });
+    const response = await page.goto(TARGET_URL, { waitUntil: 'networkidle', timeout: 90000 });
+    console.log(`Status da resposta: ${response?.status()}`);
     
-    // Bypass splash/loading do site
-    await page.waitForTimeout(8000); 
-
-    console.log('[2/4] Extraindo dados via Injeção de Script...');
-    
-    const catalogData = await page.evaluate(() => {
-      // Tentar variável global buttonLinks
-      if (window.buttonLinks && window.buttonLinks.length > 0) {
-        return { items: window.buttonLinks, bks: window.imgBk || [] };
-      }
-      
-      // Fallback: DOM Scraper
-      const scraped = [];
-      const cards = document.querySelectorAll('.card-movie, .item-movie, .movie-card, [class*="card"]');
-      cards.forEach(card => {
-        const title = card.querySelector('h1, h2, h3, .title, .name')?.innerText;
-        const poster = card.querySelector('img')?.src || card.querySelector('img')?.getAttribute('data-src');
-        const link = card.querySelector('a')?.href;
-        if (title && poster) {
-          scraped.push({ title, poster, btnInfo: [{ url: link || '' }] });
-        }
-      });
-      return { items: scraped, bks: [] };
-    });
-
-    if (!catalogData.items || catalogData.items.length === 0) {
-      throw new Error('Bloqueio detectado ou estrutura do site mudou.');
+    if (response?.status() !== 200) {
+      console.warn(`Aviso: Status HTTP ${response?.status()}. O site pode estar inacessível.`);
     }
 
-    console.log(`[3/4] Encontrados ${catalogData.items.length} itens. Salvando no Supabase...`);
+    console.log('Aguardando renderização (10s)...');
+    await page.waitForTimeout(10000); 
+
+    console.log('[2/4] Extraindo dados...');
+    
+    // Tenta esperar pela variável buttonLinks
+    try {
+      await page.waitForFunction(() => window.buttonLinks && Array.isArray(window.buttonLinks), { timeout: 15000 });
+      console.log('Variável buttonLinks encontrada!');
+    } catch (e) {
+      console.log('Variável buttonLinks não encontrada no tempo limite. Tentando extração alternativa...');
+    }
+
+    const catalogData = await page.evaluate(() => {
+      const results = { items: [], bks: [], source: 'unknown' };
+      
+      // Prioridade 1: Variáveis globais
+      if (window.buttonLinks && Array.isArray(window.buttonLinks) && window.buttonLinks.length > 0) {
+        results.items = window.buttonLinks;
+        results.bks = window.imgBk || [];
+        results.source = 'window.buttonLinks';
+        return results;
+      }
+      
+      // Prioridade 2: Scraper DOM refinado
+      const cards = document.querySelectorAll('.card-movie, .item-movie, .movie-card, [class*="card"], .v-card');
+      results.source = `dom-scraper (${cards.length} cards)`;
+      
+      cards.forEach(card => {
+        const titleEl = card.querySelector('h1, h2, h3, .title, .name, .v-card-title');
+        const imgEl = card.querySelector('img');
+        const linkEl = card.querySelector('a');
+        
+        if (titleEl && (imgEl || linkEl)) {
+          results.items.push({
+            title: titleEl.innerText.trim(),
+            poster: imgEl?.src || imgEl?.getAttribute('data-src') || '',
+            btnInfo: [{ url: linkEl?.href || '' }],
+            category: 'movie' // default
+          });
+        }
+      });
+      
+      return results;
+    });
+
+    console.log(`Fonte de dados: ${catalogData.source}`);
+    console.log(`Itens extraídos: ${catalogData.items.length}`);
+
+    if (catalogData.items.length === 0) {
+      const htmlSnippet = await page.evaluate(() => document.body.innerHTML.substring(0, 1000));
+      console.log('Snippet do HTML inicial:', htmlSnippet);
+      throw new Error('Nenhum item encontrado. Estrutura do site mudou ou bloqueio ativo.');
+    }
+
+    console.log(`[3/4] Salvando ${catalogData.items.length} itens no Supabase...`);
 
     for (let i = 0; i < catalogData.items.length; i++) {
       const item = catalogData.items[i];
+      if (!item.title) continue;
+
       try {
         const slug = generateSlug(item.title);
         const magnet = item.btnInfo?.[0]?.url || '';
-        const magnetHash = magnet.match(/btih:([a-zA-Z0-9]+)/)?.[1]?.toLowerCase() || `id-${slug}`;
+        // Usar hash do magnet ou slug como fallback
+        const magnetHash = magnet.match(/btih:([a-zA-Z0-9]+)/)?.[1]?.toLowerCase() || `slug-${slug}`;
 
-        const { error, status } = await supabase.from('movies').upsert({
+        const movieData = {
           title: item.title,
           slug: slug,
           external_id: magnetHash,
@@ -101,40 +144,58 @@ async function run() {
           backdrop: catalogData.bks[i] || item.poster || '',
           magnet: magnet,
           rating: parseFloat(item.rating) || 8.0,
-          year: parseInt(item.year) || 2024,
-          type: item.category === 'tv' ? 'series' : 'movie',
+          year: parseInt(item.year) || new Date().getFullYear(),
+          type: (item.category === 'tv' || item.title.toLowerCase().includes('série')) ? 'series' : 'movie',
           last_sync_at: new Date().toISOString()
-        }, { onConflict: 'external_id' });
+        };
 
-        if (!error) {
-          if (status === 201) imported++;
-          else updated++;
+        const { error, status } = await supabase.from('movies').upsert(movieData, { onConflict: 'external_id' });
+
+        if (error) {
+          console.error(`Erro ao salvar "${item.title}":`, error.message);
+          failed++;
+        } else {
+          if (status === 201) {
+            imported++;
+          } else {
+            updated++;
+          }
         }
-      } catch (e) { failed++; }
+      } catch (e) {
+        console.error(`Erro no loop para "${item.title}":`, e.message);
+        failed++;
+      }
     }
 
-    console.log(`[4/4] Concluído! Novos: ${imported} | Atualizados: ${updated}`);
+    console.log(`[4/4] Finalizado! Novos: ${imported} | Atualizados: ${updated} | Falhas: ${failed}`);
 
     if (logId) {
       await supabase.from('sync_logs').update({
         status: 'success',
         finished_at: new Date().toISOString(),
-        imported, updated, failed,
+        imported, 
+        updated, 
+        failed,
         duration_seconds: Math.round((Date.now() - startTime) / 1000)
       }).eq('id', logId);
     }
 
   } catch (error) {
-    console.error('FALHA NO CRAWLER:', error.message);
+    console.error('--- ERRO DETALHADO NO CRAWLER ---');
+    console.error('Mensagem:', error.message);
+    console.error('Stack:', error.stack);
+    
     if (logId) {
       await supabase.from('sync_logs').update({
         status: 'error',
         finished_at: new Date().toISOString(),
-        raw_error: error.message
+        raw_error: `${error.message}\n${error.stack}`
       }).eq('id', logId);
     }
+    process.exit(1);
   } finally {
     await browser.close();
+    console.log('Navegador fechado.');
   }
 }
 
