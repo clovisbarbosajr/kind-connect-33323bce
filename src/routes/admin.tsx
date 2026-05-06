@@ -119,7 +119,7 @@ function AdminDashboard() {
       console.error('Sync failed:', err);
     } finally {
       setSyncing(false);
-      fetchLogs();
+      fetchStats();
     }
   };
 
