@@ -48,6 +48,11 @@ async function run() {
   const page = await context.newPage();
 
   try {
+    // PASSO 0: Desativar animações para evitar "element is not stable"
+    await page.addStyleTag({
+      content: `* { transition: none !important; animation: none !important; transition-duration: 0s !important; animation-duration: 0s !important; }`
+    });
+
     // PASSO 1: Acesso Inicial
     console.log('[1/5] Acessando gateway...');
     await page.goto('https://acesso-starck.com', { waitUntil: 'networkidle' });
@@ -55,20 +60,29 @@ async function run() {
 
     // PASSO 2: Bypass Gateway
     console.log('[2/5] Iniciando fluxo de bypass...');
+    
+    // Botão #alert
     const alertBtn = page.locator('#alert');
     if (await alertBtn.isVisible()) {
-      await alertBtn.click();
+      await alertBtn.click({ force: true });
       console.log('Botão "IR PARA O NOVO DOMÍNIO" clicado.');
+    } else {
+      // Tentar clique via evaluate se não estiver visível ou falhar
+      await page.evaluate(() => document.querySelector('#alert')?.click());
     }
 
+    // Botão "Próximo"
     const proximoBtn = page.getByRole('button', { name: 'Próximo' });
     await proximoBtn.waitFor({ state: 'visible', timeout: 15000 });
     await saveArtifact(page, 'step2-modal-analise', 'png');
-    await proximoBtn.click();
+    await proximoBtn.click({ force: true });
+    console.log('Botão "Próximo" clicado.');
 
+    // Botão "OK"
     const okBtn = page.getByRole('button', { name: 'OK' });
     await okBtn.waitFor({ state: 'visible', timeout: 30000 });
-    await okBtn.click();
+    await okBtn.click({ force: true });
+    console.log('Botão "OK" clicado.');
     console.log('Fluxo de bypass concluído.');
 
     // PASSO 3: Navegação Catálogo
