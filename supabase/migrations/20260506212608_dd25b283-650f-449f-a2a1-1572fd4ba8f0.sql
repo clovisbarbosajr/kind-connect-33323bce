@@ -1,0 +1,1 @@
+ALTER TABLE public.sync_logs ADD COLUMN IF NOT EXISTS ignored INTEGER DEFAULT 0;

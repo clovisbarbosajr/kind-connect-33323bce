@@ -146,6 +146,7 @@ export type Database = {
           failed_at_step: string | null
           finished_at: string | null
           id: string
+          ignored: number | null
           imported: number | null
           raw_error: string | null
           started_at: string
@@ -161,6 +162,7 @@ export type Database = {
           failed_at_step?: string | null
           finished_at?: string | null
           id?: string
+          ignored?: number | null
           imported?: number | null
           raw_error?: string | null
           started_at?: string
@@ -176,6 +178,7 @@ export type Database = {
           failed_at_step?: string | null
           finished_at?: string | null
           id?: string
+          ignored?: number | null
           imported?: number | null
           raw_error?: string | null
           started_at?: string
