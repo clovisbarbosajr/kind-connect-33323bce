@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 
 // DOMÍNIO REAL ATUALIZADO
 const TARGET_URL = 'https://acesso-starck.com/catalog/all'; 
@@ -11,7 +12,14 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   process.exit(1);
 }
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: {
+    persistSession: false
+  },
+  realtime: {
+    transport: WebSocket
+  }
+});
 
 function generateSlug(title) {
   return title
