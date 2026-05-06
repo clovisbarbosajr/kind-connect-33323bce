@@ -26,6 +26,29 @@ function AdminDashboard() {
   const [logs, setLogs] = useState<SyncLog[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState("");
+
+  useEffect(() => {
+    const auth = localStorage.getItem("admin_auth");
+    if (auth === "true") setIsAuthenticated(true);
+  }, []);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === "admin123") { // Senha padrão simples
+      localStorage.setItem("admin_auth", "true");
+      setIsAuthenticated(true);
+    } else {
+      alert("Senha incorreta");
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("admin_auth");
+    setIsAuthenticated(false);
+  };
+
 
   const fetchLogs = async () => {
     const { data, error } = await supabase
@@ -71,6 +94,32 @@ function AdminDashboard() {
   };
 
   const lastSync = logs.find(l => l.status === 'success');
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card p-8 rounded-2xl w-full max-w-md border border-white/5 space-y-6">
+          <div className="text-center space-y-2">
+            <h1 className="text-2xl font-black italic text-neon-green">INWISE ADMIN</h1>
+            <p className="text-muted-foreground text-sm uppercase tracking-widest font-bold">Acesso Restrito</p>
+          </div>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input 
+              type="password" 
+              placeholder="Digite a senha..."
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:ring-1 focus:ring-neon-green"
+              autoFocus
+            />
+            <button type="submit" className="neon-button w-full py-3 text-sm font-black uppercase tracking-widest">
+              Entrar no Painel
+            </button>
+          </form>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground p-8">
@@ -189,6 +238,15 @@ function AdminDashboard() {
               </tbody>
             </table>
           </div>
+        </div>
+
+        <div className="flex justify-center pb-12">
+          <button 
+            onClick={handleLogout}
+            className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20 hover:text-red-500 transition-colors"
+          >
+            Encerrar Sessão Admin
+          </button>
         </div>
       </div>
     </div>
