@@ -169,7 +169,7 @@ function Section({ title, items }: { title: string, items: ContentItem[] }) {
         </button>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
         <AnimatePresence>
           {items.map((item) => (
             <Link 
@@ -184,14 +184,15 @@ function Section({ title, items }: { title: string, items: ContentItem[] }) {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 whileHover={{ y: -5 }}
+                className="h-full flex flex-col"
               >
-                <div className="relative aspect-video overflow-hidden">
+                <div className="relative aspect-[2/3] overflow-hidden bg-white/5">
                   <img 
-                    src={item.backdrop || ""} 
+                    src={item.poster || ""} 
                     alt={item.title} 
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <div className="w-12 h-12 rounded-full bg-neon-green flex items-center justify-center text-primary-foreground shadow-[0_0_15px_rgba(200,255,0,0.5)]">
                       <Play className="w-6 h-6 fill-current" />
                     </div>
@@ -201,17 +202,17 @@ function Section({ title, items }: { title: string, items: ContentItem[] }) {
                   </div>
                 </div>
                 
-                <div className="p-4 flex-1 flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold truncate text-lg group-hover:text-neon-green transition-colors">{item.title}</h4>
-                    <span className="text-neon-green text-sm flex items-center gap-1 font-bold">
+                <div className="p-4 flex-1 flex flex-col gap-1">
+                  <h4 className="font-bold truncate text-sm group-hover:text-neon-green transition-colors">{item.title}</h4>
+                  <div className="flex items-center justify-between mt-auto">
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                      <span>{item.year}</span>
+                      <span>•</span>
+                      <span className="capitalize">{item.category}</span>
+                    </div>
+                    <span className="text-neon-green text-[10px] flex items-center gap-1 font-bold">
                       <Star className="w-3 h-3 fill-neon-green" /> {item.rating}
                     </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <span>{item.year}</span>
-                    <span>•</span>
-                    <span>{item.genres?.join(", ")}</span>
                   </div>
                 </div>
               </motion.div>
