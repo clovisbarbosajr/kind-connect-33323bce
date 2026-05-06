@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+// @ts-ignore
 import WebTorrent from 'webtorrent/dist/webtorrent.min.js';
 import { Play, Pause, Volume2, VolumeX, Maximize, Settings, Subtitles, Activity, Loader2, FastForward, Rewind } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -12,7 +13,7 @@ interface TorrentPlayerProps {
 const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [client, setClient] = useState<WebTorrent.Instance | null>(null);
+  const [client, setClient] = useState<any>(null);
   const [status, setStatus] = useState<'loading' | 'metadata' | 'streaming' | 'error'>('loading');
   const [stats, setStats] = useState({ progress: 0, downloadSpeed: 0, peers: 0 });
   const [isPlaying, setIsPlaying] = useState(false);
@@ -29,11 +30,11 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
     const wtClient = new WebTorrent();
     setClient(wtClient);
 
-    wtClient.add(magnet, (torrent) => {
+    wtClient.add(magnet, (torrent: any) => {
       setStatus('metadata');
       
       // Find the largest video file
-      const file = torrent.files.find(f => 
+      const file = torrent.files.find((f: any) => 
         f.name.endsWith('.mp4') || f.name.endsWith('.mkv') || f.name.endsWith('.webm')
       );
 
@@ -41,7 +42,7 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
         file.renderTo(videoRef.current, {
           autoplay: true,
           controls: false
-        }, (err) => {
+        }, (err: any) => {
           if (err) {
             console.error('Render error:', err);
             setError('Erro ao renderizar vídeo. Torrent pode ser incompatível.');
@@ -70,7 +71,7 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
       };
     });
 
-    wtClient.on('error', (err) => {
+    wtClient.on('error', (err: any) => {
       console.error('WebTorrent error:', err);
       setError(err.message);
       setStatus('error');
