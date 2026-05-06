@@ -13,15 +13,15 @@ interface ContentItem {
   id: string;
   title: string;
   slug: string;
-  description: string;
-  poster: string;
-  backdrop: string;
-  year: number;
-  rating: number;
+  description: string | null;
+  poster: string | null;
+  backdrop: string | null;
+  year: number | null;
+  rating: number | null;
   category: 'movie' | 'series';
-  genres: string[];
-  audio_type: string;
-  resolution: string;
+  genres: string[] | null;
+  audio_type: string | null;
+  resolution: string | null;
 }
 
 function Index() {
@@ -31,13 +31,15 @@ function Index() {
 
   useEffect(() => {
     const fetchData = async () => {
+      // @ts-ignore - Catalog table newly created
       const { data, error } = await supabase.from('catalog').select('*');
       if (error) console.error(error);
       
       if (!data || data.length === 0) {
         await seedCatalog();
+        // @ts-ignore
         const { data: newData } = await supabase.from('catalog').select('*');
-        setCatalog(newData || []);
+        setCatalog((newData as ContentItem[]) || []);
       } else {
         setCatalog(data as ContentItem[]);
       }
@@ -59,7 +61,7 @@ function Index() {
       <header className="fixed top-0 w-full z-50 px-6 py-4 flex items-center justify-between bg-gradient-to-b from-background to-transparent backdrop-blur-sm">
         <div className="flex items-center gap-8">
           <h1 className="text-2xl font-black italic tracking-tighter text-neon-green">INWISE FILMES</h1>
-          <nav className="hidden md:flex items-center gap-6 font-medium text-sm">
+          <nav className="hidden md:flex items-center gap-6 font-medium text-sm text-muted-foreground">
             <Link to="/" className="text-neon-green">Home</Link>
             <Link to="/" className="hover:text-neon-green transition-colors">Filmes</Link>
             <Link to="/" className="hover:text-neon-green transition-colors">Séries</Link>
@@ -89,7 +91,7 @@ function Index() {
         <section className="relative h-[85vh] w-full">
           <div className="absolute inset-0">
             <img 
-              src={heroItem.backdrop} 
+              src={heroItem.backdrop || ""} 
               alt={heroItem.title} 
               className="w-full h-full object-cover"
             />
@@ -119,9 +121,9 @@ function Index() {
               transition={{ delay: 0.2 }}
               className="flex items-center gap-4 text-sm text-muted-foreground"
             >
-              <span className="flex items-center gap-1 text-neon-green"><Star className="w-4 h-4 fill-neon-green" /> {heroItem.rating}</span>
+              <span className="flex items-center gap-1 text-neon-green font-bold"><Star className="w-4 h-4 fill-neon-green" /> {heroItem.rating}</span>
               <span>{heroItem.year}</span>
-              <span className="bg-secondary px-2 py-0.5 rounded text-xs border border-border">{heroItem.resolution}</span>
+              <span className="bg-secondary px-2 py-0.5 rounded text-[10px] border border-white/10">{heroItem.resolution}</span>
             </motion.div>
             <motion.p 
               initial={{ opacity: 0, y: 20 }}
@@ -187,7 +189,7 @@ function Section({ title, items }: { title: string, items: ContentItem[] }) {
             >
               <div className="relative aspect-video overflow-hidden">
                 <img 
-                  src={item.backdrop} 
+                  src={item.backdrop || ""} 
                   alt={item.title} 
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
                 />
@@ -211,7 +213,7 @@ function Section({ title, items }: { title: string, items: ContentItem[] }) {
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{item.year}</span>
                   <span>•</span>
-                  <span>{item.genres.join(", ")}</span>
+                  <span>{item.genres?.join(", ")}</span>
                 </div>
               </div>
             </motion.div>

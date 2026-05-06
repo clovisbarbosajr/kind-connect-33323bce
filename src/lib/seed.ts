@@ -49,6 +49,7 @@ export const seedCatalog = async () => {
     }
   ];
 
+  // @ts-ignore - Supabase types are auto-generated and might lag behind migration
   const { error } = await supabase.from('catalog').insert(fakeData);
   if (error) console.error("Erro ao inserir dados fake:", error);
   else console.log("Catálogo populado com sucesso!");
