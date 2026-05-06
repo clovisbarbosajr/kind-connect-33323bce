@@ -63,27 +63,43 @@ function AdminDashboard() {
   };
 
 
-  const fetchLogs = async () => {
-    const { data, error } = await supabase
+  const fetchStats = async () => {
+    // Fetch logs
+    const { data: logData } = await supabase
       .from('sync_logs')
       .select('*')
       .order('started_at', { ascending: false })
       .limit(10);
     
-    if (!error && data) {
-      setLogs(data as SyncLog[]);
-    }
+    if (logData) setLogs(logData as SyncLog[]);
+
+    // Fetch health
+    const { data: healthData } = await supabase
+      .from('system_health')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(5);
+    
+    if (healthData) setHealth(healthData as SystemHealth[]);
+
+    // Fetch movie count
+    const { count } = await supabase.from('movies').select('*', { count: 'exact', head: true });
+    setMovieCount(count || 0);
+
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchLogs();
+    fetchStats();
     
-    // Inscrever em mudanças nos logs
+    // Inscrever em mudanças nos logs e saúde
     const channel = supabase
-      .channel('sync_logs_changes')
+      .channel('system_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_logs' }, () => {
-        fetchLogs();
+        fetchStats();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_health' }, () => {
+        fetchStats();
       })
       .subscribe();
 
@@ -91,6 +107,7 @@ function AdminDashboard() {
       supabase.removeChannel(channel);
     };
   }, []);
+
 
   const handleManualSync = async () => {
     setSyncing(true);
