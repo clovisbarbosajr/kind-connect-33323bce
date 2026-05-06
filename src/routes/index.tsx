@@ -40,11 +40,18 @@ function Index() {
       query = query.ilike('title', `%${searchTerm}%`);
     }
 
-    const { data, error, count } = await query;
+    console.log(`[Frontend] Fetching page ${currentPage} (range ${from}-${to}), Filter: ${activeFilter}, Search: ${searchTerm}`);
+    const { data, error, count, status } = await query;
     
     if (error) {
-      console.error('Error fetching catalog:', error);
+      console.error('[Frontend] Error fetching catalog:', error);
+      console.error('Stack Trace:', new Error().stack);
     } else {
+      console.log(`[Frontend] Received ${data?.length || 0} items. Total count in DB: ${count}. Status: ${status}`);
+      if (data && data.length > 0) {
+        console.log('[Frontend] First item payload:', JSON.stringify(data[0], null, 2));
+      }
+      
       if (isInitial) {
         setCatalog(data || []);
       } else {
