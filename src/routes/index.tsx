@@ -87,7 +87,7 @@ function Index() {
       
       <div style={{ marginTop: 40, borderTop: '1px solid #333', paddingTop: 20 }}>
         <h3>RAW DEBUG DATA (Última Resposta)</h3>
-        <pre style={{ background: '#111', padding: 10, fontSize: '10px', overflow: 'auto', maxH: '300px' }}>
+        <pre style={{ background: '#111', padding: 10, fontSize: '10px', overflow: 'auto', maxHeight: '300px' }}>
           {JSON.stringify(debugData, null, 2)}
         </pre>
       </div>
