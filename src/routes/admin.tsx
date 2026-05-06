@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { RefreshCw, CheckCircle2, XCircle, Clock, Loader2, Play, Database, AlertCircle, ExternalLink, Image as ImageIcon } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Clock, Loader2, Play, Database, AlertCircle, ExternalLink, Image as ImageIcon, Activity, ShieldAlert, Globe } from "lucide-react";
 import { motion } from "framer-motion";
 
 export const Route = createFileRoute("/admin")({
@@ -23,12 +23,24 @@ interface SyncLog {
   base_url: string | null;
 }
 
+interface SystemHealth {
+  id: string;
+  source: string;
+  status: string;
+  message: string;
+  metadata: any;
+  created_at: string;
+}
+
 function AdminDashboard() {
   const [logs, setLogs] = useState<SyncLog[]>([]);
+  const [health, setHealth] = useState<SystemHealth[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [movieCount, setMovieCount] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
+
 
   useEffect(() => {
     const auth = localStorage.getItem("admin_auth");
@@ -140,24 +152,84 @@ function AdminDashboard() {
           </button>
         </header>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <StatCard 
-            title="Última Sincronização" 
-            value={lastSync ? new Date(lastSync.finished_at!).toLocaleString() : 'Nunca'} 
-            icon={<Clock className="text-neon-green" />}
-          />
-          <StatCard 
-            title="Total Importado (Última)" 
-            value={lastSync ? lastSync.imported.toString() : '0'} 
-            icon={<Database className="text-neon-green" />}
-          />
-          <StatCard 
-            title="Status Atual" 
-            value={syncing ? 'Sincronizando...' : 'Ocioso'} 
-            icon={syncing ? <Loader2 className="animate-spin text-neon-green" /> : <CheckCircle2 className="text-neon-green" />}
-          />
+        {/* System Health Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="glass-card p-6 rounded-xl border border-white/5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold flex items-center gap-2">
+                  <Activity className="text-neon-green w-5 h-5" />
+                  Status do Sistema
+                </h3>
+                <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-neon-green/10 border border-neon-green/20 text-[10px] font-black text-neon-green uppercase tracking-widest">
+                  <div className="w-1.5 h-1.5 rounded-full bg-neon-green animate-pulse" />
+                  Banco Online
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-white/5 p-4 rounded-lg border border-white/5 space-y-1">
+                  <div className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <Globe className="w-3 h-3" /> Supabase URL
+                  </div>
+                  <div className="text-xs font-mono break-all">{import.meta.env.VITE_SUPABASE_URL}</div>
+                </div>
+                <div className="bg-white/5 p-4 rounded-lg border border-white/5 space-y-1">
+                  <div className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <Database className="w-3 h-3" /> Catálogo Local
+                  </div>
+                  <div className="text-xl font-black italic">{movieCount} <span className="text-xs font-normal not-italic text-muted-foreground">Títulos</span></div>
+                </div>
+              </div>
+
+              {/* Health Feed */}
+              <div className="space-y-2">
+                <div className="text-[10px] uppercase font-bold text-muted-foreground">Últimos Eventos de Diagnóstico</div>
+                <div className="space-y-1">
+                  {health.map((h) => (
+                    <div key={h.id} className="flex items-center justify-between p-2 rounded bg-white/[0.02] border border-white/5 text-[11px]">
+                      <div className="flex items-center gap-2">
+                        <StatusIcon status={h.status} />
+                        <span className="font-bold uppercase opacity-50 text-[9px] w-12">{h.source}</span>
+                        <span className="truncate max-w-[200px] sm:max-w-md">{h.message}</span>
+                      </div>
+                      <div className="text-[9px] text-muted-foreground font-mono">
+                        {new Date(h.created_at).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  ))}
+                  {health.length === 0 && <div className="text-center py-4 text-xs text-muted-foreground italic">Nenhum evento registrado ainda.</div>}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <StatCard 
+              title="Última Sincronização" 
+              value={lastSync ? new Date(lastSync.finished_at!).toLocaleString() : 'Nunca'} 
+              icon={<Clock className="text-neon-green" />}
+            />
+            <div className="glass-card p-6 rounded-xl border border-white/5 space-y-4">
+              <div className="text-[10px] uppercase font-bold text-muted-foreground">Configuração</div>
+              {import.meta.env.VITE_SUPABASE_URL !== health.find(h => h.source === 'crawler')?.metadata?.supabase_url && health.some(h => h.source === 'crawler' && h.metadata?.supabase_url) ? (
+                <div className="p-3 rounded bg-red-500/10 border border-red-500/20 space-y-2">
+                  <div className="flex items-center gap-2 text-red-500 font-bold text-xs">
+                    <ShieldAlert className="w-4 h-4" /> DIVERGÊNCIA DETECTADA
+                  </div>
+                  <p className="text-[10px] leading-relaxed opacity-80">
+                    O Crawler e o Frontend parecem estar usando projetos Supabase diferentes. Sincronização pode falhar.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 rounded bg-neon-green/5 border border-neon-green/10 flex items-center gap-2 text-neon-green font-bold text-xs">
+                  <CheckCircle2 className="w-4 h-4" /> Configuração Alinhada
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+
 
         {/* Logs Table */}
         <div className="glass-card rounded-xl overflow-hidden">
@@ -286,3 +358,19 @@ function StatusBadge({ status, error, step }: { status: string, error?: string |
     </div>
   );
 }
+
+function StatusIcon({ status }: { status: string }) {
+  switch (status) {
+    case 'success':
+    case 'online':
+      return <div className="w-1.5 h-1.5 rounded-full bg-neon-green shadow-[0_0_5px_rgba(57,255,20,0.5)]" />;
+    case 'error':
+    case 'offline':
+      return <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]" />;
+    case 'warning':
+      return <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 shadow-[0_0_5px_rgba(245,158,11,0.5)]" />;
+    default:
+      return <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_5px_rgba(96,165,250,0.5)]" />;
+  }
+}
+
