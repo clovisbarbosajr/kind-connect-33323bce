@@ -1,9 +1,9 @@
 import { chromium } from 'playwright';
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
+import fs from 'fs';
+import path from 'path';
 
-// DOMÍNIO REAL ATUALIZADO
-const TARGET_URL = 'https://acesso-starck.com/catalog/all'; 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -13,12 +13,8 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: {
-    persistSession: false
-  },
-  realtime: {
-    transport: WebSocket
-  }
+  auth: { persistSession: false },
+  realtime: { transport: WebSocket }
 });
 
 function generateSlug(title) {
@@ -34,28 +30,19 @@ function generateSlug(title) {
 
 async function run() {
   const startTime = Date.now();
-  console.log('--- INICIANDO SINCRONIZAÇÃO (PLAYWRIGHT) ---');
-  console.log(`Timestamp: ${new Date().toISOString()}`);
+  console.log('--- INICIANDO SINCRONIZAÇÃO RESILIENTE ---');
   
   let logId = null;
+  let currentStep = 'initializing';
+  
   try {
-    const { data: logEntry, error: logError } = await supabase
+    const { data: logEntry } = await supabase
       .from('sync_logs')
-      .insert({ status: 'running', started_at: new Date().toISOString() })
-      .select()
-      .single();
-    
-    if (logError) console.error('Erro ao criar log:', logError.message);
+      .insert({ status: 'running', started_at: new Date().toISOString(), failed_at_step: currentStep })
+      .select().single();
     logId = logEntry?.id;
-  } catch (e) {
-    console.error('Erro ao registrar início no Supabase:', e.message);
-  }
+  } catch (e) { console.error('Erro ao criar log:', e.message); }
 
-  let imported = 0;
-  let updated = 0;
-  let failed = 0;
-
-  console.log('Lançando navegador...');
   const browser = await chromium.launch({ 
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-blink-features=AutomationControlled']
@@ -63,87 +50,103 @@ async function run() {
   
   const context = await browser.newContext({
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    viewport: { width: 1920, height: 1080 }
+    viewport: { width: 1280, height: 720 }
   });
   
   const page = await context.newPage();
+  let imported = 0;
+  let updated = 0;
+  let failed = 0;
+  let finalBaseUrl = '';
 
   try {
-    console.log(`[1/4] Acessando URL: ${TARGET_URL}`);
-    const response = await page.goto(TARGET_URL, { waitUntil: 'networkidle', timeout: 90000 });
-    console.log(`Status da resposta: ${response?.status()}`);
+    // 1. Verificar URL em cache
+    currentStep = 'fetching_cached_url';
+    const { data: settings } = await supabase.from('sync_settings').select('value').eq('key', 'last_discovered_url').single();
+    let startUrl = settings?.value || 'https://acesso-starck.com';
     
-    if (response?.status() !== 200) {
-      console.warn(`Aviso: Status HTTP ${response?.status()}. O site pode estar inacessível.`);
+    console.log(`[1/6] Acessando URL de entrada: ${startUrl}`);
+    await page.goto(startUrl, { waitUntil: 'networkidle', timeout: 60000 });
+
+    // 2. Fluxo de validação se necessário
+    if (page.url().includes('acesso-starck.com')) {
+      currentStep = 'bypass_gateway';
+      console.log('Detectado gateway de acesso. Iniciando bypass...');
+      
+      // Clique em "IR PARA O NOVO DOMÍNIO"
+      const alertBtn = page.locator('#alert:has-text("👉 IR PARA O NOVO DOMÍNIO")');
+      if (await alertBtn.isVisible()) {
+        await alertBtn.click();
+        console.log('Botão "IR PARA O NOVO DOMÍNIO" clicado.');
+      }
+
+      // Aguardar modal "Análise de acesso" e clicar "Próximo"
+      const proximoBtn = page.getByRole('button', { name: 'Próximo' });
+      await proximoBtn.waitFor({ state: 'visible', timeout: 30000 });
+      await proximoBtn.click();
+      console.log('Botão "Próximo" clicado.');
+
+      // Aguardar validação e clicar "OK"
+      const okBtn = page.getByRole('button', { name: 'OK' });
+      await okBtn.waitFor({ state: 'visible', timeout: 60000 });
+      await okBtn.click();
+      console.log('Botão "OK" clicado. Validação concluída.');
+      
+      await page.waitForLoadState('networkidle');
     }
 
-    console.log('Aguardando renderização (10s)...');
-    await page.waitForTimeout(10000); 
-
-    console.log('[2/4] Extraindo dados...');
+    finalBaseUrl = new URL(page.url()).origin;
+    console.log(`[2/6] URL Final Descoberta: ${finalBaseUrl}`);
     
-    // Tenta esperar pela variável buttonLinks
-    try {
-      await page.waitForFunction(() => window.buttonLinks && Array.isArray(window.buttonLinks), { timeout: 15000 });
-      console.log('Variável buttonLinks encontrada!');
-    } catch (e) {
-      console.log('Variável buttonLinks não encontrada no tempo limite. Tentando extração alternativa...');
-    }
+    // Salvar URL descoberta
+    await supabase.from('sync_settings').upsert({ key: 'last_discovered_url', value: finalBaseUrl, updated_at: new Date().toISOString() });
+
+    // 3. Navegar para o catálogo
+    currentStep = 'navigating_to_catalog';
+    const catalogUrl = `${finalBaseUrl}/catalog/all`;
+    console.log(`[3/6] Acessando Catálogo: ${catalogUrl}`);
+    await page.goto(catalogUrl, { waitUntil: 'networkidle', timeout: 60000 });
+    
+    // Pequena pausa para garantir carregamento dinâmico
+    await page.waitForTimeout(5000);
+
+    // 4. Extração Incremental
+    currentStep = 'extracting_data';
+    console.log('[4/6] Extraindo dados e verificando duplicatas...');
+    
+    // Buscar hashes existentes para ignorar
+    const { data: existingMovies } = await supabase.from('movies').select('external_id');
+    const existingIds = new Set(existingMovies?.map(m => m.external_id) || []);
 
     const catalogData = await page.evaluate(() => {
-      const results = { items: [], bks: [], source: 'unknown' };
-      
-      // Prioridade 1: Variáveis globais
-      if (window.buttonLinks && Array.isArray(window.buttonLinks) && window.buttonLinks.length > 0) {
+      const results = { items: [], bks: [] };
+      if (window.buttonLinks && Array.isArray(window.buttonLinks)) {
         results.items = window.buttonLinks;
         results.bks = window.imgBk || [];
-        results.source = 'window.buttonLinks';
-        return results;
       }
-      
-      // Prioridade 2: Scraper DOM refinado
-      const cards = document.querySelectorAll('.card-movie, .item-movie, .movie-card, [class*="card"], .v-card');
-      results.source = `dom-scraper (${cards.length} cards)`;
-      
-      cards.forEach(card => {
-        const titleEl = card.querySelector('h1, h2, h3, .title, .name, .v-card-title');
-        const imgEl = card.querySelector('img');
-        const linkEl = card.querySelector('a');
-        
-        if (titleEl && (imgEl || linkEl)) {
-          results.items.push({
-            title: titleEl.innerText.trim(),
-            poster: imgEl?.src || imgEl?.getAttribute('data-src') || '',
-            btnInfo: [{ url: linkEl?.href || '' }],
-            category: 'movie' // default
-          });
-        }
-      });
-      
       return results;
     });
 
-    console.log(`Fonte de dados: ${catalogData.source}`);
-    console.log(`Itens extraídos: ${catalogData.items.length}`);
-
     if (catalogData.items.length === 0) {
-      const htmlSnippet = await page.evaluate(() => document.body.innerHTML.substring(0, 1000));
-      console.log('Snippet do HTML inicial:', htmlSnippet);
-      throw new Error('Nenhum item encontrado. Estrutura do site mudou ou bloqueio ativo.');
+      throw new Error('Nenhum dado encontrado no catálogo. A variável buttonLinks está vazia.');
     }
 
-    console.log(`[3/4] Salvando ${catalogData.items.length} itens no Supabase...`);
+    console.log(`[5/6] Processando ${catalogData.items.length} itens encontrados...`);
 
     for (let i = 0; i < catalogData.items.length; i++) {
       const item = catalogData.items[i];
-      if (!item.title) continue;
+      const magnet = item.btnInfo?.[0]?.url || '';
+      const magnetHash = magnet.match(/btih:([a-zA-Z0-9]+)/)?.[1]?.toLowerCase() || `slug-${generateSlug(item.title)}`;
+
+      // Incremental: pular se já existe e não for atualização forçada (aqui fazemos sempre upsert mas poderíamos pular)
+      // Para performance, só fazemos o upsert se necessário ou se o usuário quiser atualizar metadados.
+      // O usuário pediu "não reimportar conteúdo existente", então vamos pular se o hash existir.
+      if (existingIds.has(magnetHash)) {
+        continue; 
+      }
 
       try {
         const slug = generateSlug(item.title);
-        const magnet = item.btnInfo?.[0]?.url || '';
-        // Usar hash do magnet ou slug como fallback
-        const magnetHash = magnet.match(/btih:([a-zA-Z0-9]+)/)?.[1]?.toLowerCase() || `slug-${slug}`;
-
         const movieData = {
           title: item.title,
           slug: slug,
@@ -158,52 +161,54 @@ async function run() {
         };
 
         const { error, status } = await supabase.from('movies').upsert(movieData, { onConflict: 'external_id' });
-
-        if (error) {
-          console.error(`Erro ao salvar "${item.title}":`, error.message);
-          failed++;
-        } else {
-          if (status === 201) {
-            imported++;
-          } else {
-            updated++;
-          }
-        }
-      } catch (e) {
-        console.error(`Erro no loop para "${item.title}":`, e.message);
-        failed++;
-      }
+        if (error) failed++;
+        else status === 201 ? imported++ : updated++;
+      } catch (e) { failed++; }
     }
 
-    console.log(`[4/4] Finalizado! Novos: ${imported} | Atualizados: ${updated} | Falhas: ${failed}`);
+    console.log(`[6/6] Sincronização concluída. Novos: ${imported}, Atualizados: ${updated}, Falhas: ${failed}`);
 
     if (logId) {
       await supabase.from('sync_logs').update({
         status: 'success',
         finished_at: new Date().toISOString(),
-        imported, 
-        updated, 
-        failed,
+        imported, updated, failed,
+        base_url: finalBaseUrl,
         duration_seconds: Math.round((Date.now() - startTime) / 1000)
       }).eq('id', logId);
     }
 
   } catch (error) {
-    console.error('--- ERRO DETALHADO NO CRAWLER ---');
-    console.error('Mensagem:', error.message);
-    console.error('Stack:', error.stack);
+    console.error(`ERRO no passo "${currentStep}":`, error.message);
     
+    // Capturar screenshot de falha
+    let artifactPath = null;
+    try {
+      const screenshotName = `error-${Date.now()}.png`;
+      const screenshotPath = path.join('/tmp', screenshotName);
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      
+      const fileBuffer = fs.readFileSync(screenshotPath);
+      const { data: uploadData } = await supabase.storage
+        .from('sync-artifacts')
+        .upload(screenshotName, fileBuffer, { contentType: 'image/png' });
+      
+      if (uploadData) artifactPath = uploadData.path;
+    } catch (e) { console.error('Falha ao salvar screenshot:', e.message); }
+
     if (logId) {
       await supabase.from('sync_logs').update({
         status: 'error',
         finished_at: new Date().toISOString(),
-        raw_error: `${error.message}\n${error.stack}`
+        raw_error: error.message,
+        failed_at_step: currentStep,
+        artifact_path: artifactPath,
+        base_url: finalBaseUrl || page.url()
       }).eq('id', logId);
     }
     process.exit(1);
   } finally {
     await browser.close();
-    console.log('Navegador fechado.');
   }
 }
 
