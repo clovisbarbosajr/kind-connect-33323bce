@@ -176,16 +176,19 @@ function Section({ title, items }: { title: string, items: ContentItem[] }) {
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <AnimatePresence>
-          {items.map((item) => (
-            <motion.div 
+            <Link 
               key={item.id}
-              layout
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              whileHover={{ y: -5 }}
+              to="/watch/$slug"
+              params={{ slug: item.slug }}
               className="glass-card rounded-xl overflow-hidden cursor-pointer group flex flex-col h-full"
             >
+              <motion.div 
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                whileHover={{ y: -5 }}
+              >
               <div className="relative aspect-video overflow-hidden">
                 <img 
                   src={item.backdrop || ""} 
@@ -215,7 +218,8 @@ function Section({ title, items }: { title: string, items: ContentItem[] }) {
                   <span>{item.genres?.join(", ")}</span>
                 </div>
               </div>
-            </motion.div>
+              </motion.div>
+            </Link>
           ))}
         </AnimatePresence>
       </div>
