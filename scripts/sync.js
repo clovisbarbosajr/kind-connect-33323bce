@@ -181,6 +181,7 @@ async function run() {
     let hasNextPage = true;
     let lastPageUrl = '';
     const allMovieItems = [];
+    console.log(`[Config] INITIAL_FULL_SYNC=${INITIAL_FULL_SYNC}, Max Pages=${maxPages}`);
 
     while (hasNextPage && currentPage <= maxPages) {
       const currentUrl = page.url();
