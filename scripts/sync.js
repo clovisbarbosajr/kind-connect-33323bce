@@ -184,7 +184,7 @@ async function run() {
       await supabase.from('sync_logs').update({
         status: 'success',
         finished_at: new Date().toISOString(),
-        imported, updated, failed,
+        imported, updated, ignored, failed,
         base_url: finalBaseUrl,
         duration_seconds: Math.round((Date.now() - startTime) / 1000)
       }).eq('id', logId);
