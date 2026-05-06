@@ -6,24 +6,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const BASE_URL = 'https://www.starckfilmes-v11.com'
+const TARGET_DOMAIN = 'acesso-starck.com'
+const BASE_URL = `https://${TARGET_DOMAIN}`
 
 function extractJSVariable(html: string, varName: string): any {
-  const regex = new RegExp(`${varName}\\s*=\\s*(\\[[\\s\\S]*?\\]);?`, 'm')
+  // Regex flexível para capturar a variável mesmo que esteja minificada ou com espaços variados
+  const regex = new RegExp(`${varName}\\s*=\\s*(\\[[\\s\\S]*?\\]);?(\\n|\\r|<|\\s|$)`, 'm')
   const match = html.match(regex)
   if (!match) return null
 
   try {
-    // Tentar converter o formato JS solto para JSON válido
     let jsonStr = match[1]
-      .replace(/([{,])\s*([a-zA-Z0-9_]+)\s*:/g, '$1"$2":') // aspas nas chaves
-      .replace(/'/g, '"') // aspas simples para duplas
-      .replace(/,(\s*[\]}])/g, '$1') // remover vírgulas extras no final de arrays/objetos
+      // Tentar converter o formato JS solto (sem aspas nas chaves) para JSON válido
+      .replace(/([{,])\s*([a-zA-Z0-9_]+)\s*:/g, '$1"$2":') 
+      .replace(/'/g, '"')
+      .replace(/,(\s*[\]}])/g, '$1')
     
     return JSON.parse(jsonStr)
   } catch (e) {
     console.error(`Erro ao parsear ${varName}:`, e)
-    // Fallback: Tentativa mais agressiva ou retornar null
     return null
   }
 }
@@ -61,15 +62,31 @@ serve(async (req) => {
     if (logError) throw logError
     logId = logData.id
 
-    console.log(`Buscando HTML de: ${BASE_URL}`)
-    const response = await fetch(BASE_URL)
+    // URL real do catálogo conforme descoberto pela investigação
+    const catalogUrl = `${BASE_URL}/catalog/all`
+    console.log(`Buscando catálogo real em: ${catalogUrl}`)
+    
+    const response = await fetch(catalogUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Referer': BASE_URL
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Falha ao acessar ${catalogUrl}: ${response.status} ${response.statusText}`)
+    }
+
     const html = await response.text()
 
     const buttonLinks = extractJSVariable(html, 'buttonLinks')
     const imgBk = extractJSVariable(html, 'imgBk')
 
-    if (!buttonLinks) {
-      throw new Error('Não foi possível encontrar ou parsear a variável buttonLinks no HTML')
+    if (!buttonLinks || !Array.isArray(buttonLinks)) {
+      console.log("HTML length:", html.length);
+      console.log("HTML preview:", html.substring(0, 500));
+      throw new Error('Não foi possível encontrar a variável buttonLinks no HTML do catálogo. O site pode estar usando proteção contra bots ou mudou a estrutura.')
     }
 
     let imported = 0
@@ -83,15 +100,12 @@ serve(async (req) => {
 
         const slug = generateSlug(item.title)
         
-        // No site original, imgBk costuma mapear 1:1 com os itens ou ser um pool
         let backdrop = ''
         if (imgBk && imgBk[i]) {
           backdrop = imgBk[i].startsWith('http') ? imgBk[i] : `${BASE_URL}${imgBk[i]}`
         }
 
         const btn = item.btnInfo?.[0] || {}
-        
-        // Extrair hash do magnet para proteção anti-duplicidade
         const magnet = btn.url || ''
         const magnetHashMatch = magnet.match(/btih:([a-zA-Z0-9]+)/)
         const magnetHash = magnetHashMatch ? magnetHashMatch[1] : null
@@ -159,4 +173,5 @@ serve(async (req) => {
     })
   }
 })
+
 
