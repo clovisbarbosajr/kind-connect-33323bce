@@ -155,14 +155,12 @@ async function run() {
     console.log('Primeiros 5 títulos encontrados:', data.titles);
 
     // PASSO 5: Inserção no Banco
-    console.log('[5/5] Realizando inserts no Supabase...');
-    let imported = 0;
-    for (let i = 0; i < data.items.length; i++) {
-      const item = data.items[i];
+    console.log('[5/5] Preparando dados para o Supabase...');
+    const movieItems = data.items.map((item, i) => {
       const magnet = item.btnInfo?.[0]?.url || '';
       const magnetHash = magnet.match(/btih:([a-zA-Z0-9]+)/)?.[1]?.toLowerCase() || `slug-${generateSlug(item.title)}`;
       
-      const { error } = await supabase.from('movies').upsert({
+      return {
         title: item.title,
         slug: generateSlug(item.title),
         external_id: magnetHash,
@@ -172,12 +170,89 @@ async function run() {
         rating: parseFloat(item.rating) || 8.0,
         year: parseInt(item.year) || 2024,
         type: (item.category === 'tv' || item.title.toLowerCase().includes('série')) ? 'series' : 'movie',
-      }, { onConflict: 'external_id' });
+      };
+    });
 
-      if (!error) imported++;
+    console.log(`Total de títulos detectados: ${movieItems.length}`);
+    console.log('Primeiros 5 títulos prontos para insert:', JSON.stringify(movieItems.slice(0, 5), null, 2));
+
+    const BATCH_SIZE = 20;
+    let imported = 0;
+    let failed = 0;
+    let ignored = 0;
+
+    for (let i = 0; i < movieItems.length; i += BATCH_SIZE) {
+      const batch = movieItems.slice(i, i + BATCH_SIZE);
+      console.log(`\n--- Processando Batch ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} itens) ---`);
+      console.log(`Enviando ${batch.length} registros para a tabela 'movies'...`);
+      console.log(`Payload parcial (primeiro item do batch):`, JSON.stringify(batch[0], null, 2));
+
+      try {
+        const startTime = Date.now();
+        
+        // Timeout de 30 segundos para a operação do Supabase
+        const { data: upsertData, error, status, statusText } = await Promise.race([
+          supabase.from('movies').upsert(batch, { onConflict: 'external_id' }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_SUPABASE')), 30000))
+        ]);
+
+        const endTime = Date.now();
+        console.log(`Resposta do Supabase (HTTP ${status} ${statusText}) em ${endTime - startTime}ms`);
+
+        if (error) {
+          console.error('ERRO NO UPSERT DO SUPABASE:');
+          console.error('Mensagem:', error.message);
+          console.error('Detalhes:', error.details);
+          console.error('Dica:', error.hint);
+          console.error('Código:', error.code);
+          console.error('Status HTTP:', status);
+          console.error('Retorno completo:', JSON.stringify(error, null, 2));
+          
+          failed += batch.length;
+          
+          // Registrar falha no sync_logs
+          await supabase.from('sync_logs').insert({
+            status: 'batch_error',
+            raw_error: `Batch ${i}-${i + BATCH_SIZE}: ${error.message}`,
+            failed_at_step: 'upsert_movies',
+            base_url: finalBaseUrl
+          });
+        } else {
+          console.log(`Batch processado com sucesso.`);
+          imported += batch.length;
+        }
+      } catch (e) {
+        console.error(`EXCEÇÃO CRÍTICA NO BATCH:`, e.message);
+        if (e.message === 'TIMEOUT_SUPABASE') {
+          console.error('A operação do Supabase excedeu 30 segundos.');
+        }
+        failed += batch.length;
+        
+        await supabase.from('sync_logs').insert({
+          status: 'exception',
+          raw_error: `Exceção no Batch ${i}: ${e.message}`,
+          failed_at_step: 'upsert_movies_catch',
+          base_url: finalBaseUrl
+        });
+      }
     }
 
-    console.log(`SUCESSO: ${imported} títulos importados para o banco.`);
+    console.log('\n--- RESUMO DA IMPORTAÇÃO ---');
+    console.log(`Detectados: ${movieItems.length}`);
+    console.log(`Inseridos/Atualizados: ${imported}`);
+    console.log(`Falhas: ${failed}`);
+    console.log(`Ignorados (estimado): ${movieItems.length - imported - failed}`);
+
+    // Registrar log final de sucesso
+    await supabase.from('sync_logs').insert({
+      status: failed === 0 ? 'success' : 'partial_success',
+      imported: imported,
+      failed: failed,
+      base_url: finalBaseUrl,
+      finished_at: new Date().toISOString()
+    });
+
+    console.log(`Imported ${imported} movies`);
     process.exit(0);
 
   } catch (error) {
