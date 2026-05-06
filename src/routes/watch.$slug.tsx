@@ -83,11 +83,17 @@ function ContentPlayer() {
       {/* Backdrop Hero */}
       <div className="relative h-[75vh] w-full">
         <div className="absolute inset-0">
-          <img 
-            src={item.backdrop || item.poster || ""} 
-            alt={item.title} 
-            className="w-full h-full object-cover"
-          />
+          {item.backdrop || item.poster ? (
+            <img 
+              src={item.backdrop || item.poster || ""} 
+              alt={item.title} 
+              className="w-full h-full object-cover opacity-60"
+            />
+          ) : (
+            <div className="w-full h-full bg-zinc-950 flex items-center justify-center">
+               <Film className="w-20 h-20 text-white/5" />
+            </div>
+          )}
           <div className="absolute inset-0 bg-gradient-to-r from-background via-background/60 to-transparent" />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
           <div className="absolute inset-0 bg-black/20" />
