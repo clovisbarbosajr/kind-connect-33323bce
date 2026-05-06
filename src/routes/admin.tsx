@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { RefreshCw, CheckCircle2, XCircle, Clock, Loader2, Play, Database } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Clock, Loader2, Play, Database, AlertCircle, ExternalLink, Image as ImageIcon } from "lucide-react";
 import { motion } from "framer-motion";
 
 export const Route = createFileRoute("/admin")({
@@ -17,6 +17,9 @@ interface SyncLog {
   failed: number;
   status: 'running' | 'success' | 'error';
   raw_error: string | null;
+  failed_at_step: string | null;
+  artifact_path: string | null;
+  base_url: string | null;
 }
 
 function AdminDashboard() {
@@ -121,9 +124,11 @@ function AdminDashboard() {
                   <th className="px-6 py-4">Início</th>
                   <th className="px-6 py-4">Duração</th>
                   <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4">URL Base</th>
                   <th className="px-6 py-4 text-center">Importados</th>
                   <th className="px-6 py-4 text-center">Atualizados</th>
                   <th className="px-6 py-4 text-center">Falhas</th>
+                  <th className="px-6 py-4 text-center">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -152,11 +157,32 @@ function AdminDashboard() {
                           : '-'}
                       </td>
                       <td className="px-6 py-4">
-                        <StatusBadge status={log.status} error={log.raw_error} />
+                        <StatusBadge status={log.status} error={log.raw_error} step={log.failed_at_step} />
+                      </td>
+                      <td className="px-6 py-4">
+                        {log.base_url ? (
+                          <a href={log.base_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-blue-400 hover:underline">
+                            {new URL(log.base_url).hostname}
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : '-'}
                       </td>
                       <td className="px-6 py-4 text-center font-bold text-neon-green">{log.imported}</td>
                       <td className="px-6 py-4 text-center font-bold">{log.updated}</td>
                       <td className="px-6 py-4 text-center font-bold text-red-500">{log.failed}</td>
+                      <td className="px-6 py-4 text-center">
+                        {log.artifact_path && (
+                          <a 
+                            href={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/sync-artifacts/${log.artifact_path}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center p-2 rounded bg-white/5 hover:bg-white/10 text-neon-green"
+                            title="Ver Screenshot do Erro"
+                          >
+                            <ImageIcon className="w-4 h-4" />
+                          </a>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -181,12 +207,12 @@ function StatCard({ title, value, icon }: { title: string, value: string, icon: 
   );
 }
 
-function StatusBadge({ status, error }: { status: string, error?: string | null }) {
+function StatusBadge({ status, error, step }: { status: string, error?: string | null, step?: string | null }) {
   const config = {
     running: { icon: <Loader2 className="w-4 h-4 animate-spin" />, label: 'Rodando', color: 'text-blue-400 bg-blue-400/10' },
     success: { icon: <CheckCircle2 className="w-4 h-4" />, label: 'Sucesso', color: 'text-neon-green bg-neon-green/10' },
     error: { icon: <XCircle className="w-4 h-4" />, label: 'Erro', color: 'text-red-500 bg-red-500/10' },
-  }[status as 'running' | 'success' | 'error'];
+  }[status as 'running' | 'success' | 'error'] || { icon: <AlertCircle className="w-4 h-4" />, label: status, color: 'text-gray-400 bg-gray-400/10' };
 
   return (
     <div className="flex flex-col gap-1">
@@ -194,7 +220,8 @@ function StatusBadge({ status, error }: { status: string, error?: string | null 
         {config.icon}
         {config.label}
       </div>
-      {error && <div className="text-[10px] text-red-500 max-w-[200px] truncate">{error}</div>}
+      {step && <div className="text-[10px] text-muted-foreground uppercase tracking-tight">Passo: {step}</div>}
+      {error && <div className="text-[10px] text-red-500 max-w-[200px] truncate" title={error}>{error}</div>}
     </div>
   );
 }
