@@ -184,12 +184,21 @@ function Index() {
           <div className="text-center py-40">
              <div className="animate-pulse flex flex-col items-center gap-4">
                <Database className="w-12 h-12 text-neon-green opacity-20" />
-               <p className="text-muted-foreground text-sm uppercase tracking-widest font-black">Banco de dados vazio</p>
+               <p className="text-muted-foreground text-sm uppercase tracking-widest font-black">
+                 {dbStatus.count > 0 ? "Filtrando resultados..." : "Catálogo indisponível no momento"}
+               </p>
+               <div className="text-[10px] text-white/20 uppercase tracking-widest mt-2">
+                 Status: {dbStatus.count} títulos no banco de dados
+               </div>
                <button 
-                 onClick={() => window.location.reload()}
+                 onClick={() => {
+                   console.log('Recarregando dados...');
+                   setPage(0);
+                   fetchData(true);
+                 }}
                  className="mt-4 px-6 py-2 border border-neon-green/30 text-neon-green text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-neon-green hover:text-black transition-all"
                >
-                 Tentar reconectar
+                 Forçar Recarregamento
                </button>
              </div>
           </div>
