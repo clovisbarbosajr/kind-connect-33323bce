@@ -17,68 +17,39 @@ function Index() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<'all' | 'movie' | 'series' | 'anime'>('all');
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
   const [dbStatus, setDbStatus] = useState<{count: number, lastSync: string | null}>({count: 0, lastSync: null});
-  const observer = useRef<IntersectionObserver | null>(null);
 
-  const fetchData = useCallback(async (isInitial = false) => {
-    const currentPage = isInitial ? 0 : page;
-    const from = currentPage * 20;
-    const to = from + 19;
-
-    console.log(`[Frontend] Tentando buscar dados... (Página: ${currentPage}, Filtro: ${activeFilter})`);
+  const fetchData = useCallback(async () => {
+    console.log('[Frontend] Executando query: select * from movies limit 20');
     
     try {
-      let query = supabase
+      const { data, error: fetchError, status } = await supabase
         .from('movies')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(from, to);
+        .select('*')
+        .limit(20);
       
-      if (activeFilter !== 'all') {
-        query = query.eq('type', activeFilter);
-      }
-
-      if (searchTerm) {
-        query = query.ilike('title', `%${searchTerm}%`);
-      }
-
-      console.log(`[Frontend] Requesting Supabase: Range ${from}-${to}, Filter: ${activeFilter}, Search: ${searchTerm}`);
-      const { data, error: fetchError, count, status } = await query;
-      
-      console.log(`[Frontend] Supabase Response: status=${status}, dataLength=${data?.length}, error=`, fetchError);
-
+      console.log(`[Frontend] Resposta Supabase: status=${status}, dataLength=${data?.length}`);
       if (fetchError) {
-        console.error('[Frontend] Error fetching catalog:', fetchError);
-        setError(`Erro Supabase: ${fetchError.message} (${fetchError.code})`);
+        console.error('[Frontend] Erro Supabase:', fetchError);
+        setError(`Erro: ${fetchError.message}`);
       } else {
+        console.log('[Frontend] Payload recebido:', data);
+        setCatalog(data || []);
         setError(null);
-        if (data && data.length > 0) {
-          console.log('[Frontend] Exemplo do payload (primeiro item):', {
-            id: data[0].id,
-            title: data[0].title,
-            poster: data[0].poster ? 'presente' : 'ausente',
-            backdrop: data[0].backdrop ? 'presente' : 'ausente'
-          });
-        }
-        
-        if (isInitial) {
-          setCatalog(data || []);
-        } else {
-          setCatalog(prev => [...prev, ...(data || [])]);
-        }
-        setHasMore(data?.length === 20);
-        if (count !== null) setDbStatus(prev => ({...prev, count}));
       }
     } catch (err: any) {
-      console.error('[Frontend] Exception in fetchData:', err);
-      setError(`Erro inesperado: ${err.message || 'Falha na requisição'}`);
+      console.error('[Frontend] Exceção na query:', err);
+      setError(`Erro inesperado: ${err.message}`);
     } finally {
       setLoading(false);
-      console.log('[Frontend] Loading finalizado.');
+      console.log('[Frontend] Loading encerrado.');
     }
-  }, [activeFilter, searchTerm, page]);
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchData();
+  }, [fetchData]);
 
   // Check DB status on mount
   useEffect(() => {
@@ -95,23 +66,12 @@ function Index() {
 
   useEffect(() => {
     setLoading(true);
-    fetchData(true);
-  }, [activeFilter, searchTerm]);
-
-  useEffect(() => {
-    if (page > 0) fetchData();
-  }, [page]);
+    fetchData();
+  }, [fetchData]);
 
   const lastElementRef = useCallback((node: HTMLDivElement) => {
-    if (loading) return;
-    if (observer.current) observer.current.disconnect();
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        setPage(prev => prev + 1);
-      }
-    });
-    if (node) observer.current.observe(node);
-  }, [loading, hasMore]);
+    // Paginação desativada temporariamente para simplificação
+  }, []);
 
   const heroItem = catalog.find(i => i.is_hero) || catalog[0];
 
@@ -217,8 +177,7 @@ function Index() {
                  onClick={() => {
                    console.log('Recarregando dados...');
                    setError(null);
-                   setPage(0);
-                   fetchData(true);
+                   fetchData();
                  }}
                  className="mt-4 px-6 py-2 border border-neon-green/30 text-neon-green text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-neon-green hover:text-black transition-all"
                >
