@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import WebTorrent from 'webtorrent';
+import WebTorrent from 'webtorrent/dist/webtorrent.min.js';
 import { Play, Pause, Volume2, VolumeX, Maximize, Settings, Subtitles, Activity, Loader2, FastForward, Rewind } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
