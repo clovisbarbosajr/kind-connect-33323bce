@@ -30,7 +30,7 @@ function generateSlug(title) {
 
 async function run() {
   const startTime = Date.now();
-  console.log('--- INICIANDO SINCRONIZAÇÃO RESILIENTE ---');
+  console.log('--- INICIANDO SINCRONIZAÇÃO INCREMENTAL INTELIGENTE ---');
   
   let logId = null;
   let currentStep = 'initializing';
@@ -56,117 +56,129 @@ async function run() {
   const page = await context.newPage();
   let imported = 0;
   let updated = 0;
+  let ignored = 0;
   let failed = 0;
   let finalBaseUrl = '';
 
   try {
-    // 1. Verificar URL em cache
-    currentStep = 'fetching_cached_url';
+    // 1. Verificar se é a primeira execução (banco vazio)
+    currentStep = 'check_db_state';
+    const { count: movieCount } = await supabase.from('movies').select('*', { count: 'exact', head: true });
+    const isFullSync = movieCount === 0;
+    console.log(`Estado do banco: ${movieCount} títulos. Modo: ${isFullSync ? 'CARGA COMPLETA' : 'INCREMENTAL'}`);
+
+    // 2. Resolver URL Base (Acesso Starck)
+    currentStep = 'resolving_base_url';
     const { data: settings } = await supabase.from('sync_settings').select('value').eq('key', 'last_discovered_url').single();
     let startUrl = settings?.value || 'https://acesso-starck.com';
     
-    console.log(`[1/6] Acessando URL de entrada: ${startUrl}`);
     await page.goto(startUrl, { waitUntil: 'networkidle', timeout: 60000 });
 
-    // 2. Fluxo de validação se necessário
     if (page.url().includes('acesso-starck.com')) {
-      currentStep = 'bypass_gateway';
-      console.log('Detectado gateway de acesso. Iniciando bypass...');
-      
-      // Clique em "IR PARA O NOVO DOMÍNIO"
+      console.log('Executando bypass do gateway...');
       const alertBtn = page.locator('#alert:has-text("👉 IR PARA O NOVO DOMÍNIO")');
-      if (await alertBtn.isVisible()) {
-        await alertBtn.click();
-        console.log('Botão "IR PARA O NOVO DOMÍNIO" clicado.');
-      }
-
-      // Aguardar modal "Análise de acesso" e clicar "Próximo"
+      if (await alertBtn.isVisible()) await alertBtn.click();
       const proximoBtn = page.getByRole('button', { name: 'Próximo' });
-      await proximoBtn.waitFor({ state: 'visible', timeout: 30000 });
+      await proximoBtn.waitFor({ state: 'visible', timeout: 20000 });
       await proximoBtn.click();
-      console.log('Botão "Próximo" clicado.');
-
-      // Aguardar validação e clicar "OK"
       const okBtn = page.getByRole('button', { name: 'OK' });
-      await okBtn.waitFor({ state: 'visible', timeout: 60000 });
+      await okBtn.waitFor({ state: 'visible', timeout: 40000 });
       await okBtn.click();
-      console.log('Botão "OK" clicado. Validação concluída.');
-      
       await page.waitForLoadState('networkidle');
     }
 
     finalBaseUrl = new URL(page.url()).origin;
-    console.log(`[2/6] URL Final Descoberta: ${finalBaseUrl}`);
-    
-    // Salvar URL descoberta
     await supabase.from('sync_settings').upsert({ key: 'last_discovered_url', value: finalBaseUrl, updated_at: new Date().toISOString() });
 
-    // 3. Navegar para o catálogo
-    currentStep = 'navigating_to_catalog';
-    const catalogUrl = `${finalBaseUrl}/catalog/all`;
-    console.log(`[3/6] Acessando Catálogo: ${catalogUrl}`);
-    await page.goto(catalogUrl, { waitUntil: 'networkidle', timeout: 60000 });
+    // 3. Definir URL de Captura (Todo o catálogo se vazio, ou Year=2026 se incremental)
+    const targetPath = isFullSync ? '/catalog/all' : '/catalog/all?year=2026';
+    const pagesToScan = isFullSync ? 20 : 3; // Varre mais se for a primeira vez
     
-    // Pequena pausa para garantir carregamento dinâmico
-    await page.waitForTimeout(5000);
-
-    // 4. Extração Incremental
-    currentStep = 'extracting_data';
-    console.log('[4/6] Extraindo dados e verificando duplicatas...');
-    
-    // Buscar hashes existentes para ignorar
+    // 4. Buscar hashes existentes para pular
     const { data: existingMovies } = await supabase.from('movies').select('external_id');
     const existingIds = new Set(existingMovies?.map(m => m.external_id) || []);
 
-    const catalogData = await page.evaluate(() => {
-      const results = { items: [], bks: [] };
-      if (window.buttonLinks && Array.isArray(window.buttonLinks)) {
-        results.items = window.buttonLinks;
-        results.bks = window.imgBk || [];
-      }
-      return results;
-    });
+    for (let p = 1; p <= pagesToScan; p++) {
+      currentStep = `scanning_page_${p}`;
+      const pageUrl = `${finalBaseUrl}${targetPath}${targetPath.includes('?') ? '&' : '?'}page=${p}`;
+      console.log(`[Página ${p}/${pagesToScan}] Acessando: ${pageUrl}`);
+      
+      await page.goto(pageUrl, { waitUntil: 'networkidle', timeout: 60000 });
+      
+      // --- REMOVER POPUPS E MODAIS (Telegram, etc) ---
+      await page.evaluate(() => {
+        const selectors = ['.modal', '.popup', '#telegram-popup', '.swal2-container', '[class*="popup"]', '[id*="modal"]'];
+        selectors.forEach(s => {
+          document.querySelectorAll(s).forEach(el => el.remove());
+        });
+        // Remove overlays que impedem clique
+        document.querySelectorAll('.modal-backdrop, .overlay').forEach(el => el.remove());
+        document.body.style.overflow = 'auto';
+      });
 
-    if (catalogData.items.length === 0) {
-      throw new Error('Nenhum dado encontrado no catálogo. A variável buttonLinks está vazia.');
+      await page.waitForTimeout(3000);
+
+      // Extração
+      const catalogData = await page.evaluate(() => {
+        const results = { items: [], bks: [] };
+        if (window.buttonLinks && Array.isArray(window.buttonLinks)) {
+          results.items = window.buttonLinks;
+          results.bks = window.imgBk || [];
+        }
+        return results;
+      });
+
+      if (catalogData.items.length === 0) {
+        console.log(`Página ${p} vazia ou fim do catálogo.`);
+        break;
+      }
+
+      console.log(`Encontrados ${catalogData.items.length} itens na página ${p}.`);
+
+      for (let i = 0; i < catalogData.items.length; i++) {
+        const item = catalogData.items[i];
+        const magnet = item.btnInfo?.[0]?.url || '';
+        const magnetHash = magnet.match(/btih:([a-zA-Z0-9]+)/)?.[1]?.toLowerCase() || `slug-${generateSlug(item.title)}`;
+
+        if (existingIds.has(magnetHash)) {
+          ignored++;
+          continue;
+        }
+
+        try {
+          const slug = generateSlug(item.title);
+          const movieData = {
+            title: item.title,
+            slug: slug,
+            external_id: magnetHash,
+            poster: item.poster || '',
+            backdrop: catalogData.bks[i] || item.poster || '',
+            magnet: magnet,
+            rating: parseFloat(item.rating) || 8.0,
+            year: parseInt(item.year) || new Date().getFullYear(),
+            type: (item.category === 'tv' || item.title.toLowerCase().includes('série')) ? 'series' : 'movie',
+            last_sync_at: new Date().toISOString()
+          };
+
+          const { error, status } = await supabase.from('movies').upsert(movieData, { onConflict: 'external_id' });
+          if (error) {
+            console.error(`Erro ao salvar ${item.title}:`, error.message);
+            failed++;
+          } else {
+            status === 201 ? imported++ : updated++;
+            existingIds.add(magnetHash); // Evita duplicados na mesma run
+          }
+        } catch (e) { failed++; }
+      }
+      
+      // Se for incremental e não encontramos nada novo em uma página inteira, podemos parar mais cedo
+      if (!isFullSync && imported === 0 && p > 1) {
+        console.log('Nenhum título novo nesta página. Encerrando busca incremental.');
+        break;
+      }
     }
 
-    console.log(`[5/6] Processando ${catalogData.items.length} itens encontrados...`);
-
-    for (let i = 0; i < catalogData.items.length; i++) {
-      const item = catalogData.items[i];
-      const magnet = item.btnInfo?.[0]?.url || '';
-      const magnetHash = magnet.match(/btih:([a-zA-Z0-9]+)/)?.[1]?.toLowerCase() || `slug-${generateSlug(item.title)}`;
-
-      // Incremental: pular se já existe e não for atualização forçada (aqui fazemos sempre upsert mas poderíamos pular)
-      // Para performance, só fazemos o upsert se necessário ou se o usuário quiser atualizar metadados.
-      // O usuário pediu "não reimportar conteúdo existente", então vamos pular se o hash existir.
-      if (existingIds.has(magnetHash)) {
-        continue; 
-      }
-
-      try {
-        const slug = generateSlug(item.title);
-        const movieData = {
-          title: item.title,
-          slug: slug,
-          external_id: magnetHash,
-          poster: item.poster || '',
-          backdrop: catalogData.bks[i] || item.poster || '',
-          magnet: magnet,
-          rating: parseFloat(item.rating) || 8.0,
-          year: parseInt(item.year) || new Date().getFullYear(),
-          type: (item.category === 'tv' || item.title.toLowerCase().includes('série')) ? 'series' : 'movie',
-          last_sync_at: new Date().toISOString()
-        };
-
-        const { error, status } = await supabase.from('movies').upsert(movieData, { onConflict: 'external_id' });
-        if (error) failed++;
-        else status === 201 ? imported++ : updated++;
-      } catch (e) { failed++; }
-    }
-
-    console.log(`[6/6] Sincronização concluída. Novos: ${imported}, Atualizados: ${updated}, Falhas: ${failed}`);
+    console.log(`FINALIZADO: Novos: ${imported} | Atualizados: ${updated} | Ignorados: ${ignored} | Falhas: ${failed}`);
 
     if (logId) {
       await supabase.from('sync_logs').update({
@@ -179,33 +191,32 @@ async function run() {
     }
 
   } catch (error) {
-    console.error(`ERRO no passo "${currentStep}":`, error.message);
+    console.error(`ERRO CRÍTICO no passo "${currentStep}":`, error.message);
     
-    // Capturar screenshot de falha
-    let artifactPath = null;
+    // Artifacts
     try {
-      const screenshotName = `error-${Date.now()}.png`;
-      const screenshotPath = path.join('/tmp', screenshotName);
-      await page.screenshot({ path: screenshotPath, fullPage: true });
+      const timestamp = Date.now();
+      const screenshotName = `error-${timestamp}.png`;
+      const htmlName = `error-${timestamp}.html`;
       
-      const fileBuffer = fs.readFileSync(screenshotPath);
-      const { data: uploadData } = await supabase.storage
-        .from('sync-artifacts')
-        .upload(screenshotName, fileBuffer, { contentType: 'image/png' });
+      await page.screenshot({ path: `/tmp/${screenshotName}`, fullPage: true });
+      const htmlContent = await page.content();
+      fs.writeFileSync(`/tmp/${htmlName}`, htmlContent);
       
-      if (uploadData) artifactPath = uploadData.path;
-    } catch (e) { console.error('Falha ao salvar screenshot:', e.message); }
-
-    if (logId) {
-      await supabase.from('sync_logs').update({
-        status: 'error',
-        finished_at: new Date().toISOString(),
-        raw_error: error.message,
-        failed_at_step: currentStep,
-        artifact_path: artifactPath,
-        base_url: finalBaseUrl || page.url()
-      }).eq('id', logId);
-    }
+      await supabase.storage.from('sync-artifacts').upload(screenshotName, fs.readFileSync(`/tmp/${screenshotName}`), { contentType: 'image/png' });
+      await supabase.storage.from('sync-artifacts').upload(htmlName, fs.readFileSync(`/tmp/${htmlName}`), { contentType: 'text/html' });
+      
+      if (logId) {
+        await supabase.from('sync_logs').update({
+          status: 'error',
+          finished_at: new Date().toISOString(),
+          raw_error: error.message,
+          failed_at_step: currentStep,
+          artifact_path: screenshotName,
+          base_url: finalBaseUrl || page.url()
+        }).eq('id', logId);
+      }
+    } catch (e) { console.error('Erro ao salvar artefatos:', e.message); }
     process.exit(1);
   } finally {
     await browser.close();
