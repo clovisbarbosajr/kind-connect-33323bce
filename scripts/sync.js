@@ -178,192 +178,77 @@ async function run() {
     
     let currentPage = 1;
     const maxPages = INITIAL_FULL_SYNC ? 500 : 3;
-    let hasNextPage = true;
-    let lastPageUrl = '';
     const allMovieItems = [];
     console.log(`[Config] INITIAL_FULL_SYNC=${INITIAL_FULL_SYNC}, Max Pages=${maxPages}`);
 
-    while (hasNextPage && currentPage <= maxPages) {
-      const currentUrl = page.url();
-      console.log(`\n--- Processando Página ${currentPage} ---`);
-      console.log(`URL Atual: ${currentUrl}`);
+    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+      const pageUrl = `${finalBaseUrl}/catalog/all?page=${pageNum}`;
+      console.log(`\n--- Navegando para Página ${pageNum} ---`);
+      console.log(`URL: ${pageUrl}`);
       
-      if (currentUrl === lastPageUrl) {
-        console.log('[Paginação] URL repetida detectada. Parando.');
-        break;
-      }
-      lastPageUrl = currentUrl;
-      
-      // Aguardar os dados estarem disponíveis na window
-      await page.waitForFunction(() => (window.buttonLinks && window.buttonLinks.length > 0) || document.body.innerText.includes('Não encontramos'), { timeout: 15000 }).catch(() => {
-        console.log('Aviso: Timeout aguardando window.buttonLinks.');
-      });
-
-      const pageData = await page.evaluate(() => {
-        const items = window.buttonLinks || [];
-        const posters = window.imgBk || [];
-        const titles = items.map(i => i.title);
+      try {
+        await page.goto(pageUrl, { waitUntil: 'networkidle', timeout: 60000 });
+        await page.waitForTimeout(5000); // Pausa para renderização JS
         
-        // Tentar encontrar botão ou link de próxima página
-        const nextSelectors = [
-          '.pagination-next', 
-          'a[rel="next"]', 
-          '.next-page', 
-          '.next', 
-          'li.next a', 
-          'a.pagination-link:last-child',
-          '.pagination li:last-child a',
-          'button:has-text("Próxima")',
-          'a:has-text("Próxima")'
-        ];
+        // Aguardar os dados estarem disponíveis na window
+        await page.waitForFunction(() => (window.buttonLinks && window.buttonLinks.length > 0) || document.body.innerText.includes('Não encontramos'), { timeout: 15000 }).catch(() => {
+          console.log('Aviso: Timeout aguardando window.buttonLinks.');
+        });
 
-        let nextBtn = null;
-        for (const selector of nextSelectors) {
-          try {
-            const el = document.querySelector(selector);
-            if (el && el.offsetParent !== null) { // Visível
-              nextBtn = el;
-              break;
-            }
-          } catch (e) {}
-        }
-        
-        if (!nextBtn) {
-          const allLinks = Array.from(document.querySelectorAll('a, button'));
-          nextBtn = allLinks.find(el => {
-            const text = el.innerText.trim();
-            return text === 'Próxima' || text === 'Próximo' || text === '>' || text === '»' || text.includes('Next');
-          });
-        }
+        const pageData = await page.evaluate(() => {
+          const items = window.buttonLinks || [];
+          const posters = window.imgBk || [];
+          const titles = items.map(i => i.title);
+          
+          return { 
+            items, 
+            posters, 
+            titles: titles.slice(0, 5)
+          };
+        });
 
-        const hasNext = !!nextBtn;
-        
-        return { 
-          items, 
-          posters, 
-          hasNext, 
-          titles: titles.slice(0, 5),
-          htmlSnippet: document.body.innerHTML.slice(0, 500)
-        };
-      });
-
-      if (pageData.items.length === 0) {
-        console.log('[Paginação] Nenhum item encontrado nesta página. Encerrando paginação.');
-        break;
-      }
-
-      console.log(`Página ${currentPage}: ${pageData.items.length} títulos encontrados.`);
-      console.log(`Exemplos: ${pageData.titles.join(', ')}`);
-
-      const movieItems = pageData.items.map((item, i) => {
-        const magnet = item.btnInfo?.[0]?.url || '';
-        const magnetHash = magnet.match(/btih:([a-zA-Z0-9]+)/)?.[1]?.toLowerCase() || `slug-${generateSlug(item.title)}`;
-        
-        return {
-          title: item.title,
-          slug: generateSlug(item.title),
-          external_id: magnetHash,
-          poster: item.poster || '',
-          backdrop: pageData.posters[i] || item.poster || '',
-          magnet: magnet,
-          rating: parseFloat(item.rating) || 8.0,
-          year: parseInt(item.year) || 2024,
-          type: (item.category === 'tv' || item.title.toLowerCase().includes('série') || item.title.toLowerCase().includes('s01') || item.title.toLowerCase().includes('temporada')) ? 'series' : 'movie',
-        };
-      });
-
-      allMovieItems.push(...movieItems);
-      console.log(`Total acumulado: ${allMovieItems.length} títulos.`);
-
-      // Verificar se o último item desta página é igual ao último item da página anterior (loop detectado)
-      if (allMovieItems.length > pageData.items.length) {
-        const lastItemThisPage = movieItems[movieItems.length - 1].external_id;
-        const lastItemPrevPage = allMovieItems[allMovieItems.length - movieItems.length - 1].external_id;
-        if (lastItemThisPage === lastItemPrevPage) {
-          console.log('[Paginação] Itens duplicados consecutivos detectados. Encerrando paginação.');
+        if (!pageData.items || pageData.items.length === 0) {
+          console.log(`[Paginação] Nenhum item encontrado na página ${pageNum}. Encerrando loop.`);
           break;
         }
-      }
 
-      if (pageData.hasNext && currentPage < maxPages) {
-        console.log(`[Paginação] Botão "Próximo" detectado. Tentando navegar...`);
-        try {
-          const oldUrl = page.url();
+        console.log(`Página ${pageNum}: ${pageData.items.length} títulos encontrados.`);
+        console.log(`Exemplos: ${pageData.titles.join(', ')}`);
+
+        const movieItems = pageData.items.map((item, i) => {
+          const magnet = item.btnInfo?.[0]?.url || '';
+          const magnetHash = magnet.match(/btih:([a-zA-Z0-9]+)/)?.[1]?.toLowerCase() || `slug-${generateSlug(item.title)}`;
           
-          const nextUrl = await page.evaluate(() => {
-            const nextSelectors = [
-              '.pagination-next', 
-              'a[rel="next"]', 
-              '.next-page', 
-              '.next', 
-              'li.next a', 
-              'a.pagination-link:last-child',
-              '.pagination li:last-child a'
-            ];
-            
-            let nextBtn = null;
-            for (const selector of nextSelectors) {
-              const el = document.querySelector(selector);
-              if (el && el.offsetParent !== null) { nextBtn = el; break; }
-            }
-            
-            if (!nextBtn) {
-              const allLinks = Array.from(document.querySelectorAll('a, button'));
-              nextBtn = allLinks.find(el => {
-                const text = el.innerText.trim();
-                return text === 'Próxima' || text === 'Próximo' || text === '>' || text === '»' || text.includes('Next');
-              });
-            }
+          return {
+            title: item.title,
+            slug: generateSlug(item.title),
+            external_id: magnetHash,
+            poster: item.poster || '',
+            backdrop: pageData.posters[i] || item.poster || '',
+            magnet: magnet,
+            rating: parseFloat(item.rating) || 8.0,
+            year: parseInt(item.year) || 2024,
+            type: (item.category === 'tv' || item.title.toLowerCase().includes('série') || item.title.toLowerCase().includes('s01') || item.title.toLowerCase().includes('temporada')) ? 'series' : 'movie',
+          };
+        });
 
-            if (nextBtn) {
-              // Se for um link (A), retorna o href absoluto
-              if (nextBtn.tagName === 'A' && nextBtn.href) {
-                return nextBtn.href;
-              }
-              // Se for um botão ou não tiver href, tenta clicar
-              nextBtn.click();
-              return null;
-            } else {
-              // Fallback para URL manual baseada em parâmetro
-              const url = new URL(window.location.href);
-              const currentPageNum = parseInt(url.searchParams.get('page') || '1');
-              url.searchParams.set('page', (currentPageNum + 1).toString());
-              return url.toString();
-            }
-          });
-
-          if (nextUrl) {
-            console.log(`[Paginação] Próxima URL detectada: ${nextUrl}`);
-            await page.goto(nextUrl, { waitUntil: 'networkidle', timeout: 30000 });
-          } else {
-            console.log(`[Paginação] Clique realizado. Aguardando navegação...`);
-            // Aguardar URL mudar ou novos dados carregarem
-            await Promise.race([
-              page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20000 }),
-              page.waitForFunction((old) => window.location.href !== old, { timeout: 20000 }, oldUrl),
-              page.waitForTimeout(10000)
-            ]).catch(() => console.log('Aviso: Navegação demorou. Continuando mesmo assim.'));
-          }
+        // Verificar duplicados consecutivos (se a página retornou os mesmos itens da anterior)
+        if (allMovieItems.length > 0) {
+          const lastItemThisPage = movieItems[0].external_id;
+          const lastItemPrevPage = allMovieItems[allMovieItems.length - pageData.items.length]?.external_id;
           
-          const newUrl = page.url();
-          if (newUrl === oldUrl && !nextUrl) {
-            console.log('[Paginação] URL não mudou após o clique. Tentando mudança manual via URL...');
-            const urlObj = new URL(oldUrl);
-            const nextPage = currentPage + 1;
-            urlObj.searchParams.set('page', nextPage.toString());
-            console.log(`[Paginação] Navegando manualmente para: ${urlObj.toString()}`);
-            await page.goto(urlObj.toString(), { waitUntil: 'networkidle' });
+          if (lastItemThisPage === lastItemPrevPage) {
+            console.log('[Paginação] Loop detectado (página retornou itens idênticos). Parando.');
+            break;
           }
-
-          await page.waitForTimeout(5000); // Pausa essencial para renderização JS e window.buttonLinks
-          currentPage++;
-        } catch (e) {
-          console.log('Erro na navegação de próxima página:', e.message);
-          hasNextPage = false;
         }
-      } else {
-        hasNextPage = false;
-        console.log(currentPage >= maxPages ? `[Fim] Limite de páginas atingido (${maxPages}).` : '[Fim] Próxima página não disponível.');
+
+        allMovieItems.push(...movieItems);
+        console.log(`Total acumulado: ${allMovieItems.length} títulos.`);
+
+      } catch (e) {
+        console.error(`Erro ao processar página ${pageNum}:`, e.message);
+        break;
       }
     }
 
