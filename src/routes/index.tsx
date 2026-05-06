@@ -153,11 +153,6 @@ function Index() {
         </section>
       )}
 
-      {/* DEBUG PANEL (Temporary) */}
-      <div className="fixed bottom-4 left-4 z-[999] bg-black/90 border border-white/10 p-3 rounded-xl text-[10px] font-mono space-y-1 backdrop-blur-xl">
-         <div className="flex items-center gap-2 text-neon-green"><Database size={12} /> DB: {dbStatus.count} registros</div>
-         <div className="flex items-center gap-2 text-blue-400"><Wifi size={12} /> Last Sync: {dbStatus.lastSync ? new Date(dbStatus.lastSync).toLocaleString() : 'Pendente'}</div>
-      </div>
 
       {/* Main Content */}
       <main className={`container mx-auto px-6 relative z-10 space-y-16 pb-32 ${heroItem && !searchTerm && activeFilter === 'all' ? '-mt-24' : 'pt-32'}`}>
@@ -179,10 +174,17 @@ function Index() {
         {loading && <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 text-neon-green animate-spin opacity-50" /></div>}
 
         {!loading && catalog.length === 0 && (
-          <div className="text-center py-40 space-y-4">
-             <div className="text-6xl opacity-20">🎬</div>
-             <p className="text-muted-foreground text-xl">Aguardando sincronização inicial do catálogo...</p>
-             <div className="text-xs text-blue-400">O crawler roda automaticamente via GitHub Actions.</div>
+          <div className="text-center py-40">
+             <div className="animate-pulse flex flex-col items-center gap-4">
+               <Database className="w-12 h-12 text-neon-green opacity-20" />
+               <p className="text-muted-foreground text-sm uppercase tracking-widest font-black">Banco de dados vazio</p>
+               <button 
+                 onClick={() => window.location.reload()}
+                 className="mt-4 px-6 py-2 border border-neon-green/30 text-neon-green text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-neon-green hover:text-black transition-all"
+               >
+                 Tentar reconectar
+               </button>
+             </div>
           </div>
         )}
       </main>
