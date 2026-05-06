@@ -193,8 +193,18 @@ async function run() {
         
         // Tentar encontrar botão de próxima página
         // Padrões comuns: .pagination-next, a[rel="next"], ou botão que contém "Próxim" ou ">"
-        const nextBtn = document.querySelector('.pagination-next, a[rel="next"], .next-page, .next');
-        const hasNext = !!nextBtn;
+        const nextBtn = document.querySelector('.pagination-next, a[rel="next"], .next-page, .next, li.next a, a.pagination-link:last-child');
+        
+        // Se o botão de "Próximo" for apenas um texto ou tiver um ícone
+        const allLinks = Array.from(document.querySelectorAll('a, button'));
+        const foundByText = allLinks.find(el => 
+          el.innerText.includes('Próxima') || 
+          el.innerText.includes('Próximo') || 
+          el.innerText.trim() === '>' ||
+          el.innerText.trim() === '»'
+        );
+
+        const hasNext = !!(nextBtn || foundByText);
         
         return { items, posters, hasNext, titles: titles.slice(0, 5) };
       });
@@ -216,7 +226,7 @@ async function run() {
           magnet: magnet,
           rating: parseFloat(item.rating) || 8.0,
           year: parseInt(item.year) || 2024,
-          type: (item.category === 'tv' || item.title.toLowerCase().includes('série')) ? 'series' : 'movie',
+          type: (item.category === 'tv' || item.title.toLowerCase().includes('série') || item.title.toLowerCase().includes('s01') || item.title.toLowerCase().includes('temporada')) ? 'series' : 'movie',
         };
       });
 
