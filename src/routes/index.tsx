@@ -66,23 +66,12 @@ function Index() {
 
   useEffect(() => {
     setLoading(true);
-    fetchData(true);
-  }, [activeFilter, searchTerm]);
-
-  useEffect(() => {
-    if (page > 0) fetchData();
-  }, [page]);
+    fetchData();
+  }, [fetchData]);
 
   const lastElementRef = useCallback((node: HTMLDivElement) => {
-    if (loading) return;
-    if (observer.current) observer.current.disconnect();
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        setPage(prev => prev + 1);
-      }
-    });
-    if (node) observer.current.observe(node);
-  }, [loading, hasMore]);
+    // Paginação desativada temporariamente para simplificação
+  }, []);
 
   const heroItem = catalog.find(i => i.is_hero) || catalog[0];
 
