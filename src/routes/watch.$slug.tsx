@@ -30,6 +30,7 @@ function ContentPlayer() {
   const { slug } = Route.useParams();
   const [item, setItem] = useState<ContentItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPlayer, setShowPlayer] = useState(false);
 
   useEffect(() => {
     const fetchItem = async () => {
