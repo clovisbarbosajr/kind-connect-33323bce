@@ -14,6 +14,7 @@ type Movie = Tables<"movies">;
 function Index() {
   const [catalog, setCatalog] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilter, setActiveFilter] = useState<'all' | 'movie' | 'series' | 'anime'>('all');
   const [page, setPage] = useState(0);
@@ -43,12 +44,13 @@ function Index() {
     }
 
     console.log(`[Frontend] Fetching page ${currentPage} (range ${from}-${to}), Filter: ${activeFilter}, Search: ${searchTerm}`);
-    const { data, error, count, status } = await query;
+    const { data, error: fetchError, count, status } = await query;
     
-    if (error) {
-      console.error('[Frontend] Error fetching catalog:', error);
-      console.error('Stack Trace:', new Error().stack);
+    if (fetchError) {
+      console.error('[Frontend] Error fetching catalog:', fetchError);
+      setError(fetchError.message);
     } else {
+      setError(null);
       console.log(`[Frontend] Received ${data?.length || 0} items. Total count in DB: ${count}. Status: ${status}`);
       if (data && data.length > 0) {
         console.log('[Frontend] First item payload:', JSON.stringify(data[0], null, 2));
@@ -182,12 +184,12 @@ function Index() {
 
         {loading && <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 text-neon-green animate-spin opacity-50" /></div>}
 
-        {!loading && catalog.length === 0 && (
+        {!loading && (catalog.length === 0 || error) && (
           <div className="text-center py-40">
              <div className="animate-pulse flex flex-col items-center gap-4">
-               <Database className="w-12 h-12 text-neon-green opacity-20" />
+               {error ? <Wifi className="w-12 h-12 text-red-500 opacity-50" /> : <Database className="w-12 h-12 text-neon-green opacity-20" />}
                <p className="text-muted-foreground text-sm uppercase tracking-widest font-black">
-                 {dbStatus.count > 0 ? "Filtrando resultados..." : "Catálogo indisponível no momento"}
+                 {error ? `Erro de Conexão: ${error}` : (dbStatus.count > 0 ? "Filtrando resultados..." : "Catálogo indisponível no momento")}
                </p>
                <div className="text-[10px] text-white/20 uppercase tracking-widest mt-2">
                  Status: {dbStatus.count} títulos no banco de dados
@@ -195,12 +197,13 @@ function Index() {
                <button 
                  onClick={() => {
                    console.log('Recarregando dados...');
+                   setError(null);
                    setPage(0);
                    fetchData(true);
                  }}
                  className="mt-4 px-6 py-2 border border-neon-green/30 text-neon-green text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-neon-green hover:text-black transition-all"
                >
-                 Forçar Recarregamento
+                 Tentar Novamente
                </button>
              </div>
           </div>

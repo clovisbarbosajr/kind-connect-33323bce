@@ -180,6 +180,7 @@ async function run() {
     const maxPages = INITIAL_FULL_SYNC ? 500 : 3;
     let hasNextPage = true;
     let lastPageUrl = '';
+    const allMovieItems = [];
 
     while (hasNextPage && currentPage <= maxPages) {
       const currentUrl = page.url();
