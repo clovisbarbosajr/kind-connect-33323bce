@@ -83,11 +83,17 @@ function ContentPlayer() {
       {/* Backdrop Hero */}
       <div className="relative h-[75vh] w-full">
         <div className="absolute inset-0">
-          <img 
-            src={item.backdrop || item.poster || ""} 
-            alt={item.title} 
-            className="w-full h-full object-cover"
-          />
+          {item.backdrop || item.poster ? (
+            <img 
+              src={item.backdrop || item.poster || ""} 
+              alt={item.title} 
+              className="w-full h-full object-cover opacity-60"
+            />
+          ) : (
+            <div className="w-full h-full bg-zinc-950 flex items-center justify-center">
+               <Film className="w-20 h-20 text-white/5" />
+            </div>
+          )}
           <div className="absolute inset-0 bg-gradient-to-r from-background via-background/60 to-transparent" />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
           <div className="absolute inset-0 bg-black/20" />
@@ -104,7 +110,14 @@ function ContentPlayer() {
             animate={{ opacity: 1, y: 0 }}
             className="rounded-2xl overflow-hidden shadow-[0_30px_60px_rgba(0,0,0,0.8)] border border-white/10 aspect-[2/3]"
           >
-            <img src={item.poster || ""} alt={item.title} className="w-full h-full object-cover" />
+            {item.poster ? (
+              <img src={item.poster} alt={item.title} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-zinc-900 flex flex-col items-center justify-center gap-2">
+                <Film className="w-12 h-12 text-white/20" />
+                <span className="text-[10px] text-white/40 uppercase font-black">Sem Poster</span>
+              </div>
+            )}
           </motion.div>
         </div>
 

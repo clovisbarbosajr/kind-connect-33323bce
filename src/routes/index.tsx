@@ -29,42 +29,55 @@ function Index() {
 
     console.log(`[Frontend] Tentando buscar dados... (Página: ${currentPage}, Filtro: ${activeFilter})`);
     
-    let query = supabase
-      .from('movies')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to);
-    
-    if (activeFilter !== 'all') {
-      query = query.eq('type', activeFilter);
-    }
-
-    if (searchTerm) {
-      query = query.ilike('title', `%${searchTerm}%`);
-    }
-
-    console.log(`[Frontend] Fetching page ${currentPage} (range ${from}-${to}), Filter: ${activeFilter}, Search: ${searchTerm}`);
-    const { data, error: fetchError, count, status } = await query;
-    
-    if (fetchError) {
-      console.error('[Frontend] Error fetching catalog:', fetchError);
-      setError(fetchError.message);
-    } else {
-      setError(null);
-      console.log(`[Frontend] Received ${data?.length || 0} items. Total count in DB: ${count}. Status: ${status}`);
-      if (data && data.length > 0) {
-        console.log('[Frontend] First item payload:', JSON.stringify(data[0], null, 2));
-      }
+    try {
+      let query = supabase
+        .from('movies')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
       
-      if (isInitial) {
-        setCatalog(data || []);
-      } else {
-        setCatalog(prev => [...prev, ...(data || [])]);
+      if (activeFilter !== 'all') {
+        query = query.eq('type', activeFilter);
       }
-      setHasMore(data?.length === 20);
-      if (count !== null) setDbStatus(prev => ({...prev, count}));
+
+      if (searchTerm) {
+        query = query.ilike('title', `%${searchTerm}%`);
+      }
+
+      console.log(`[Frontend] Requesting Supabase: Range ${from}-${to}, Filter: ${activeFilter}, Search: ${searchTerm}`);
+      const { data, error: fetchError, count, status } = await query;
+      
+      console.log(`[Frontend] Supabase Response: status=${status}, dataLength=${data?.length}, error=`, fetchError);
+
+      if (fetchError) {
+        console.error('[Frontend] Error fetching catalog:', fetchError);
+        setError(`Erro Supabase: ${fetchError.message} (${fetchError.code})`);
+      } else {
+        setError(null);
+        if (data && data.length > 0) {
+          console.log('[Frontend] Exemplo do payload (primeiro item):', {
+            id: data[0].id,
+            title: data[0].title,
+            poster: data[0].poster ? 'presente' : 'ausente',
+            backdrop: data[0].backdrop ? 'presente' : 'ausente'
+          });
+        }
+        
+        if (isInitial) {
+          setCatalog(data || []);
+        } else {
+          setCatalog(prev => [...prev, ...(data || [])]);
+        }
+        setHasMore(data?.length === 20);
+        if (count !== null) setDbStatus(prev => ({...prev, count}));
+      }
+    } catch (err: any) {
+      console.error('[Frontend] Exception in fetchData:', err);
+      setError(`Erro inesperado: ${err.message || 'Falha na requisição'}`);
+    } finally {
+      setLoading(false);
+      console.log('[Frontend] Loading finalizado.');
     }
-    setLoading(false);
   }, [activeFilter, searchTerm, page]);
 
   // Check DB status on mount
@@ -132,13 +145,19 @@ function Index() {
 
       {/* Hero Section */}
       {heroItem && !searchTerm && activeFilter === 'all' && (
-        <section className="relative h-[90vh] w-full">
+        <section className="relative h-[90vh] w-full bg-black">
           <div className="absolute inset-0">
-            <img 
-              src={heroItem.backdrop || heroItem.poster || ""} 
-              alt={heroItem.title} 
-              className="w-full h-full object-cover"
-            />
+            {heroItem.backdrop || heroItem.poster ? (
+              <img 
+                src={heroItem.backdrop || heroItem.poster || ""} 
+                alt={heroItem.title} 
+                className="w-full h-full object-cover opacity-60"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-black flex items-center justify-center">
+                <Film className="w-20 h-20 text-white/5" />
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-r from-background via-background/20 to-transparent" />
             <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
           </div>
@@ -151,7 +170,7 @@ function Index() {
               {heroItem.title}
             </motion.h2>
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="flex items-center gap-6 text-sm font-bold">
-              <span className="flex items-center gap-1.5 text-neon-green"><Star className="w-4 h-4 fill-neon-green" /> {heroItem.rating}</span>
+              <span className="flex items-center gap-1.5 text-neon-green"><Star className="w-4 h-4 fill-neon-green" /> {heroItem.rating || 'N/A'}</span>
               <span className="text-white/60">{heroItem.year}</span>
               <span className="bg-white/10 px-3 py-1 rounded text-[10px] border border-white/10 uppercase tracking-widest">{heroItem.resolution}</span>
             </motion.div>
@@ -217,7 +236,14 @@ const MovieCard = ({ item, ref }: { item: Movie, ref: any }) => {
   return (
     <Link to="/watch/$slug" params={{ slug: item.slug }} className="group relative flex flex-col h-full" ref={ref}>
       <motion.div layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} whileHover={{ y: -8 }} className="relative aspect-[2/3] rounded-xl overflow-hidden bg-white/5 border border-white/5 transition-all duration-300 group-hover:border-neon-green/50">
-        <img src={item.poster || ""} alt={item.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+        {item.poster ? (
+          <img src={item.poster} alt={item.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 gap-2">
+            <Film className="w-8 h-8 text-white/20" />
+            <span className="text-[8px] text-white/40 uppercase font-black px-2 text-center">{item.title}</span>
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all flex flex-col justify-end p-4">
            <div className="flex items-center justify-center w-full h-full absolute top-0 left-0">
               <div className="w-12 h-12 rounded-full bg-neon-green flex items-center justify-center text-black scale-0 group-hover:scale-100 transition-transform duration-500 shadow-[0_0_20px_rgba(200,255,0,0.5)]">
@@ -226,14 +252,14 @@ const MovieCard = ({ item, ref }: { item: Movie, ref: any }) => {
            </div>
         </div>
         <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10 text-[10px] font-bold text-neon-green">
-          <Star size={10} fill="currentColor" /> {item.rating}
+          <Star size={10} fill="currentColor" /> {item.rating || 'N/A'}
         </div>
       </motion.div>
       <div className="mt-4 space-y-1">
         <h4 className="font-bold text-sm truncate group-hover:text-neon-green transition-colors uppercase">{item.title}</h4>
         <div className="flex items-center justify-between text-[10px] text-muted-foreground font-black uppercase tracking-widest">
-          <span>{item.audio_type}</span>
-          <span className="text-white/40">{item.year}</span>
+          <span>{item.audio_type || 'Dub/Leg'}</span>
+          <span className="text-white/40">{item.year || '2024'}</span>
         </div>
       </div>
     </Link>
