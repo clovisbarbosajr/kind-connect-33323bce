@@ -145,13 +145,19 @@ function Index() {
 
       {/* Hero Section */}
       {heroItem && !searchTerm && activeFilter === 'all' && (
-        <section className="relative h-[90vh] w-full">
+        <section className="relative h-[90vh] w-full bg-black">
           <div className="absolute inset-0">
-            <img 
-              src={heroItem.backdrop || heroItem.poster || ""} 
-              alt={heroItem.title} 
-              className="w-full h-full object-cover"
-            />
+            {heroItem.backdrop || heroItem.poster ? (
+              <img 
+                src={heroItem.backdrop || heroItem.poster || ""} 
+                alt={heroItem.title} 
+                className="w-full h-full object-cover opacity-60"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-zinc-900 to-black flex items-center justify-center">
+                <Film className="w-20 h-20 text-white/5" />
+              </div>
+            )}
             <div className="absolute inset-0 bg-gradient-to-r from-background via-background/20 to-transparent" />
             <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
           </div>
