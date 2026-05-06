@@ -234,22 +234,37 @@ async function run() {
       console.log(`Total acumulado: ${allMovieItems.length} títulos.`);
 
       if (pageData.hasNext && currentPage < maxPages) {
-        console.log('Navegando para próxima página...');
+        console.log(`[Paginação] Botão "Próximo" detectado. Navegando para página ${currentPage + 1}...`);
         try {
           await page.evaluate(() => {
-            const nextBtn = document.querySelector('.pagination-next, a[rel="next"], .next-page, .next');
-            if (nextBtn) nextBtn.click();
+            const nextBtn = document.querySelector('.pagination-next, a[rel="next"], .next-page, .next, li.next a, a.pagination-link:last-child');
+            if (nextBtn) {
+              nextBtn.click();
+              return;
+            }
+            const allLinks = Array.from(document.querySelectorAll('a, button'));
+            const foundByText = allLinks.find(el => 
+              el.innerText.includes('Próxima') || 
+              el.innerText.includes('Próximo') || 
+              el.innerText.trim() === '>' ||
+              el.innerText.trim() === '»'
+            );
+            if (foundByText) foundByText.click();
           });
           await page.waitForLoadState('networkidle');
-          await page.waitForTimeout(3000); // Segurança para renderização
+          await page.waitForTimeout(5000); // Aguardar renderização
           currentPage++;
         } catch (e) {
-          console.log('Erro ao navegar para próxima página:', e.message);
+          console.log('Erro ao clicar no botão de próxima página:', e.message);
           hasNextPage = false;
         }
       } else {
         hasNextPage = false;
-        console.log('Fim das páginas ou limite atingido.');
+        if (currentPage >= maxPages) {
+          console.log(`[Fim] Limite de páginas atingido (${maxPages}).`);
+        } else {
+          console.log('[Fim] Botão de próxima página não encontrado.');
+        }
       }
     }
 
