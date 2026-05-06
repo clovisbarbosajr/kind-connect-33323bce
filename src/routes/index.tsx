@@ -26,6 +26,8 @@ function Index() {
     const from = currentPage * 20;
     const to = from + 19;
 
+    console.log(`[Frontend] Tentando buscar dados... (Página: ${currentPage}, Filtro: ${activeFilter})`);
+    
     let query = supabase
       .from('movies')
       .select('*', { count: 'exact' })
@@ -40,11 +42,18 @@ function Index() {
       query = query.ilike('title', `%${searchTerm}%`);
     }
 
-    const { data, error, count } = await query;
+    console.log(`[Frontend] Fetching page ${currentPage} (range ${from}-${to}), Filter: ${activeFilter}, Search: ${searchTerm}`);
+    const { data, error, count, status } = await query;
     
     if (error) {
-      console.error('Error fetching catalog:', error);
+      console.error('[Frontend] Error fetching catalog:', error);
+      console.error('Stack Trace:', new Error().stack);
     } else {
+      console.log(`[Frontend] Received ${data?.length || 0} items. Total count in DB: ${count}. Status: ${status}`);
+      if (data && data.length > 0) {
+        console.log('[Frontend] First item payload:', JSON.stringify(data[0], null, 2));
+      }
+      
       if (isInitial) {
         setCatalog(data || []);
       } else {
@@ -177,12 +186,21 @@ function Index() {
           <div className="text-center py-40">
              <div className="animate-pulse flex flex-col items-center gap-4">
                <Database className="w-12 h-12 text-neon-green opacity-20" />
-               <p className="text-muted-foreground text-sm uppercase tracking-widest font-black">Banco de dados vazio</p>
+               <p className="text-muted-foreground text-sm uppercase tracking-widest font-black">
+                 {dbStatus.count > 0 ? "Filtrando resultados..." : "Catálogo indisponível no momento"}
+               </p>
+               <div className="text-[10px] text-white/20 uppercase tracking-widest mt-2">
+                 Status: {dbStatus.count} títulos no banco de dados
+               </div>
                <button 
-                 onClick={() => window.location.reload()}
+                 onClick={() => {
+                   console.log('Recarregando dados...');
+                   setPage(0);
+                   fetchData(true);
+                 }}
                  className="mt-4 px-6 py-2 border border-neon-green/30 text-neon-green text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-neon-green hover:text-black transition-all"
                >
-                 Tentar reconectar
+                 Forçar Recarregamento
                </button>
              </div>
           </div>

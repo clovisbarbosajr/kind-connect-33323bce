@@ -9,9 +9,12 @@ const INITIAL_FULL_SYNC = process.env.INITIAL_FULL_SYNC === 'true';
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('ERRO: Variáveis de ambiente SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configuradas.');
+  console.log('Ambiente detectado:', Object.keys(process.env).filter(k => k.includes('SUPABASE')));
   process.exit(1);
 }
 
+console.log(`URL Supabase: ${maskUrl(SUPABASE_URL)}`);
+console.log(`Chave Service Role: ${SUPABASE_SERVICE_ROLE_KEY.slice(0, 10)}...`);
 console.log(`MODO DE SINCRONIZAÇÃO: ${INITIAL_FULL_SYNC ? 'IMPORTAÇÃO COMPLETA' : 'SINCRONIZAÇÃO INCREMENTAL'}`);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -173,17 +176,25 @@ async function run() {
     // PASSO 4: Extração de Dados com Paginação
     console.log('[4/5] Iniciando extração de títulos...');
     
-    const allMovieItems = [];
     let currentPage = 1;
-    const maxPages = INITIAL_FULL_SYNC ? 500 : 3; // Limite de 3 páginas para incremental
+    const maxPages = INITIAL_FULL_SYNC ? 500 : 3;
     let hasNextPage = true;
+    let lastPageUrl = '';
 
     while (hasNextPage && currentPage <= maxPages) {
-      console.log(`\n--- Extraindo Página ${currentPage} ---`);
+      const currentUrl = page.url();
+      console.log(`\n--- Processando Página ${currentPage} ---`);
+      console.log(`URL Atual: ${currentUrl}`);
+      
+      if (currentUrl === lastPageUrl) {
+        console.log('[Paginação] URL repetida detectada. Parando.');
+        break;
+      }
+      lastPageUrl = currentUrl;
       
       // Aguardar os dados estarem disponíveis na window
-      await page.waitForFunction(() => window.buttonLinks && window.buttonLinks.length > 0, { timeout: 15000 }).catch(() => {
-        console.log('Aviso: window.buttonLinks não carregou nesta página.');
+      await page.waitForFunction(() => (window.buttonLinks && window.buttonLinks.length > 0) || document.body.innerText.includes('Não encontramos'), { timeout: 15000 }).catch(() => {
+        console.log('Aviso: Timeout aguardando window.buttonLinks.');
       });
 
       const pageData = await page.evaluate(() => {
@@ -191,28 +202,57 @@ async function run() {
         const posters = window.imgBk || [];
         const titles = items.map(i => i.title);
         
-        // Tentar encontrar botão de próxima página
-        // Padrões comuns: .pagination-next, a[rel="next"], ou botão que contém "Próxim" ou ">"
-        const nextBtn = document.querySelector('.pagination-next, a[rel="next"], .next-page, .next, li.next a, a.pagination-link:last-child');
-        
-        // Se o botão de "Próximo" for apenas um texto ou tiver um ícone
-        const allLinks = Array.from(document.querySelectorAll('a, button'));
-        const foundByText = allLinks.find(el => 
-          el.innerText.includes('Próxima') || 
-          el.innerText.includes('Próximo') || 
-          el.innerText.trim() === '>' ||
-          el.innerText.trim() === '»'
-        );
+        // Tentar encontrar botão ou link de próxima página
+        const nextSelectors = [
+          '.pagination-next', 
+          'a[rel="next"]', 
+          '.next-page', 
+          '.next', 
+          'li.next a', 
+          'a.pagination-link:last-child',
+          '.pagination li:last-child a',
+          'button:has-text("Próxima")',
+          'a:has-text("Próxima")'
+        ];
 
-        const hasNext = !!(nextBtn || foundByText);
+        let nextBtn = null;
+        for (const selector of nextSelectors) {
+          try {
+            const el = document.querySelector(selector);
+            if (el && el.offsetParent !== null) { // Visível
+              nextBtn = el;
+              break;
+            }
+          } catch (e) {}
+        }
         
-        return { items, posters, hasNext, titles: titles.slice(0, 5) };
+        if (!nextBtn) {
+          const allLinks = Array.from(document.querySelectorAll('a, button'));
+          nextBtn = allLinks.find(el => {
+            const text = el.innerText.trim();
+            return text === 'Próxima' || text === 'Próximo' || text === '>' || text === '»' || text.includes('Next');
+          });
+        }
+
+        const hasNext = !!nextBtn;
+        
+        return { 
+          items, 
+          posters, 
+          hasNext, 
+          titles: titles.slice(0, 5),
+          htmlSnippet: document.body.innerHTML.slice(0, 500)
+        };
       });
+
+      if (pageData.items.length === 0) {
+        console.log('[Paginação] Nenhum item encontrado nesta página. Encerrando paginação.');
+        break;
+      }
 
       console.log(`Página ${currentPage}: ${pageData.items.length} títulos encontrados.`);
       console.log(`Exemplos: ${pageData.titles.join(', ')}`);
 
-      // Transformar para o formato do banco
       const movieItems = pageData.items.map((item, i) => {
         const magnet = item.btnInfo?.[0]?.url || '';
         const magnetHash = magnet.match(/btih:([a-zA-Z0-9]+)/)?.[1]?.toLowerCase() || `slug-${generateSlug(item.title)}`;
@@ -233,38 +273,85 @@ async function run() {
       allMovieItems.push(...movieItems);
       console.log(`Total acumulado: ${allMovieItems.length} títulos.`);
 
+      // Verificar se o último item desta página é igual ao último item da página anterior (loop detectado)
+      if (allMovieItems.length > pageData.items.length) {
+        const lastItemThisPage = movieItems[movieItems.length - 1].external_id;
+        const lastItemPrevPage = allMovieItems[allMovieItems.length - movieItems.length - 1].external_id;
+        if (lastItemThisPage === lastItemPrevPage) {
+          console.log('[Paginação] Itens duplicados consecutivos detectados. Encerrando paginação.');
+          break;
+        }
+      }
+
       if (pageData.hasNext && currentPage < maxPages) {
-        console.log(`[Paginação] Botão "Próximo" detectado. Navegando para página ${currentPage + 1}...`);
+        console.log(`[Paginação] Botão "Próximo" detectado. Tentando navegar...`);
         try {
+          const oldUrl = page.url();
+          
           await page.evaluate(() => {
-            const nextBtn = document.querySelector('.pagination-next, a[rel="next"], .next-page, .next, li.next a, a.pagination-link:last-child');
-            if (nextBtn) {
-              nextBtn.click();
-              return;
+            const nextSelectors = [
+              '.pagination-next', 
+              'a[rel="next"]', 
+              '.next-page', 
+              '.next', 
+              'li.next a', 
+              'a.pagination-link:last-child',
+              '.pagination li:last-child a'
+            ];
+            
+            let nextBtn = null;
+            for (const selector of nextSelectors) {
+              const el = document.querySelector(selector);
+              if (el && el.offsetParent !== null) { nextBtn = el; break; }
             }
-            const allLinks = Array.from(document.querySelectorAll('a, button'));
-            const foundByText = allLinks.find(el => 
-              el.innerText.includes('Próxima') || 
-              el.innerText.includes('Próximo') || 
-              el.innerText.trim() === '>' ||
-              el.innerText.trim() === '»'
-            );
-            if (foundByText) foundByText.click();
+            
+            if (!nextBtn) {
+              const allLinks = Array.from(document.querySelectorAll('a, button'));
+              nextBtn = allLinks.find(el => {
+                const text = el.innerText.trim();
+                return text === 'Próxima' || text === 'Próximo' || text === '>' || text === '»' || text.includes('Next');
+              });
+            }
+
+            if (nextBtn) {
+              console.log('Clicando no botão de próxima página:', nextBtn.innerText);
+              nextBtn.click();
+            } else {
+              // Se não achou botão pra clicar, tenta achar um link com ?page=
+              const pageLinks = Array.from(document.querySelectorAll('a[href*="page="]'));
+              const nextPageNum = parseInt(new URL(window.location.href).searchParams.get('page') || '1') + 1;
+              const nextPageLink = pageLinks.find(a => a.getAttribute('href').includes(`page=${nextPageNum}`));
+              if (nextPageLink) {
+                console.log('Seguindo link direto para página:', nextPageNum);
+                nextPageLink.click();
+              }
+            }
           });
-          await page.waitForLoadState('networkidle');
-          await page.waitForTimeout(5000); // Aguardar renderização
+
+          // Aguardar URL mudar ou novos dados carregarem
+          await Promise.race([
+            page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20000 }),
+            page.waitForFunction((old) => window.location.href !== old, { timeout: 20000 }, oldUrl),
+            page.waitForTimeout(15000)
+          ]).catch(() => console.log('Aviso: Navegação demorou. Continuando mesmo assim.'));
+          
+          const newUrl = page.url();
+          if (newUrl === oldUrl) {
+            console.log('[Paginação] URL não mudou após o clique. Tentando mudar via URL manualmente...');
+            const urlObj = new URL(oldUrl);
+            urlObj.searchParams.set('page', (currentPage + 1).toString());
+            await page.goto(urlObj.toString(), { waitUntil: 'networkidle' });
+          }
+
+          await page.waitForTimeout(5000); // Pausa para renderização JS (importante para window.buttonLinks)
           currentPage++;
         } catch (e) {
-          console.log('Erro ao clicar no botão de próxima página:', e.message);
+          console.log('Erro na navegação de próxima página:', e.message);
           hasNextPage = false;
         }
       } else {
         hasNextPage = false;
-        if (currentPage >= maxPages) {
-          console.log(`[Fim] Limite de páginas atingido (${maxPages}).`);
-        } else {
-          console.log('[Fim] Botão de próxima página não encontrado.');
-        }
+        console.log(currentPage >= maxPages ? `[Fim] Limite de páginas atingido (${maxPages}).` : '[Fim] Próxima página não disponível.');
       }
     }
 
