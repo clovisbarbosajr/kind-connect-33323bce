@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Play, Star, Calendar, Info, Download, ArrowLeft, Loader2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { Play, Star, Calendar, Info, Download, ArrowLeft, Loader2, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import TorrentPlayer from "@/components/TorrentPlayer";
 
 export const Route = createFileRoute("/watch/$slug")({
   component: ContentPlayer,
@@ -29,6 +30,7 @@ function ContentPlayer() {
   const { slug } = Route.useParams();
   const [item, setItem] = useState<ContentItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPlayer, setShowPlayer] = useState(false);
 
   useEffect(() => {
     const fetchItem = async () => {
@@ -126,7 +128,10 @@ function ContentPlayer() {
           </p>
 
           <div className="flex flex-wrap gap-4 pt-4">
-            <button className="neon-button flex items-center gap-2 px-8 py-3">
+            <button 
+              onClick={() => setShowPlayer(true)}
+              className="neon-button flex items-center gap-2 px-8 py-3"
+            >
               <Play className="w-6 h-6 fill-current" /> Assistir Online
             </button>
             <a 
@@ -144,6 +149,33 @@ function ContentPlayer() {
           )}
         </div>
       </div>
+
+      {/* Torrent Player Modal */}
+      <AnimatePresence>
+        {showPlayer && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-12"
+          >
+            <div className="relative w-full max-w-6xl">
+              <button 
+                onClick={() => setShowPlayer(false)}
+                className="absolute -top-12 right-0 text-white/50 hover:text-white flex items-center gap-2 transition-colors uppercase text-xs font-bold tracking-widest"
+              >
+                Fechar Player <X className="w-5 h-5" />
+              </button>
+              
+              <TorrentPlayer 
+                magnet={item.magnet || ""} 
+                title={item.title} 
+                poster={item.backdrop || ""} 
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
