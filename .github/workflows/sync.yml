@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm install playwright @supabase/supabase-js
-          npx playwright install chromium
+          npx playwright install --with-deps chromium
 
       - name: Run sync script
         env:
