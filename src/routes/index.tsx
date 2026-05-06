@@ -63,7 +63,6 @@ function Index() {
             <Link to="/" className="text-neon-green">Home</Link>
             <Link to="/" className="hover:text-neon-green transition-colors">Filmes</Link>
             <Link to="/" className="hover:text-neon-green transition-colors">Séries</Link>
-            <Link to="/admin" className="hover:text-neon-green transition-colors uppercase font-black text-[10px] border border-neon-green/30 px-2 py-1 rounded">Admin</Link>
           </nav>
         </div>
         
