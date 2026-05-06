@@ -184,12 +184,12 @@ function Index() {
 
         {loading && <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 text-neon-green animate-spin opacity-50" /></div>}
 
-        {!loading && catalog.length === 0 && (
+        {!loading && (catalog.length === 0 || error) && (
           <div className="text-center py-40">
              <div className="animate-pulse flex flex-col items-center gap-4">
-               <Database className="w-12 h-12 text-neon-green opacity-20" />
+               {error ? <Wifi className="w-12 h-12 text-red-500 opacity-50" /> : <Database className="w-12 h-12 text-neon-green opacity-20" />}
                <p className="text-muted-foreground text-sm uppercase tracking-widest font-black">
-                 {dbStatus.count > 0 ? "Filtrando resultados..." : "Catálogo indisponível no momento"}
+                 {error ? `Erro de Conexão: ${error}` : (dbStatus.count > 0 ? "Filtrando resultados..." : "Catálogo indisponível no momento")}
                </p>
                <div className="text-[10px] text-white/20 uppercase tracking-widest mt-2">
                  Status: {dbStatus.count} títulos no banco de dados
@@ -197,12 +197,13 @@ function Index() {
                <button 
                  onClick={() => {
                    console.log('Recarregando dados...');
+                   setError(null);
                    setPage(0);
                    fetchData(true);
                  }}
                  className="mt-4 px-6 py-2 border border-neon-green/30 text-neon-green text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-neon-green hover:text-black transition-all"
                >
-                 Forçar Recarregamento
+                 Tentar Novamente
                </button>
              </div>
           </div>
