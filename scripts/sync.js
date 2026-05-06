@@ -84,7 +84,9 @@ async function extractTitleData(page, url) {
       type: type,
       synopsis: data.synopsis,
       imdb_rating: parseFloat(data.imdb_rating) || 0,
-      source_url: url
+      source_url: url,
+      poster: data.posters?.[0] || '',
+      backdrop: data.posters?.[1] || data.posters?.[0] || ''
     }, { onConflict: 'slug' }).select().single();
 
     if (titleError) throw titleError;
@@ -102,7 +104,9 @@ async function extractTitleData(page, url) {
         };
       });
 
-      await supabase.from('torrent_options').upsert(torrents, { onConflict: 'magnet' });
+      const { error: torrentError } = await supabase.from('torrent_options').upsert(torrents, { onConflict: 'magnet' });
+      if (torrentError) console.error(`[Discovery] Erro ao salvar torrents:`, torrentError.message);
+      console.log(`[Discovery] ${torrents.length} torrents processados para: ${data.title}`);
       console.log(`[Discovery] ${torrents.length} torrents salvos para: ${data.title}`);
     }
 

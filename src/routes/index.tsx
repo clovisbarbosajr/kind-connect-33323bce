@@ -8,26 +8,37 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const [movies, setMovies] = useState<any[]>([]);
+  const [debugData, setDebugData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
-      console.log("[Frontend] Iniciando select direto...");
+      console.log("[Frontend] Iniciando select na tabela titles...");
       try {
         const { data, error } = await supabase
-          .from('movies')
-          .select('*')
+          .from('titles')
+          .select(`
+            *,
+            torrent_options(*)
+          `)
           .limit(20);
         
-        console.log("[Frontend] Resultado:", { 
+        console.log("[Frontend] Resultado (titles):", { 
           count: data?.length, 
           error,
           firstItem: data?.[0] 
         });
 
-        if (data) setMovies(data);
+        if (error) {
+          console.error("[Supabase Error]", error);
+          setDebugData({ error });
+        } else {
+          setMovies(data || []);
+          setDebugData(data);
+        }
       } catch (e) {
-        console.error("[Frontend] Crash na query:", e);
+        console.error("[Frontend] Crash na query titles:", e);
+        setDebugData({ crash: e instanceof Error ? e.message : String(e) });
       } finally {
         setLoading(false);
       }
@@ -67,9 +78,19 @@ function Index() {
 
       {movies.length === 0 && (
         <div style={{ marginTop: 40, border: '1px solid red', padding: 20 }}>
-          Nenhum filme retornado pelo Supabase.
+          <h2 style={{ color: 'red' }}>DEBUG: Array de títulos vazio</h2>
+          <pre style={{ background: '#111', padding: 10, fontSize: '12px', overflow: 'auto' }}>
+            {JSON.stringify(debugData, null, 2)}
+          </pre>
         </div>
       )}
+      
+      <div style={{ marginTop: 40, borderTop: '1px solid #333', paddingTop: 20 }}>
+        <h3>RAW DEBUG DATA (Última Resposta)</h3>
+        <pre style={{ background: '#111', padding: 10, fontSize: '10px', overflow: 'auto', maxH: '300px' }}>
+          {JSON.stringify(debugData, null, 2)}
+        </pre>
+      </div>
     </div>
   );
 }
