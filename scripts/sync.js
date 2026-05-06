@@ -9,9 +9,12 @@ const INITIAL_FULL_SYNC = process.env.INITIAL_FULL_SYNC === 'true';
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('ERRO: Variáveis de ambiente SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configuradas.');
+  console.log('Ambiente detectado:', Object.keys(process.env).filter(k => k.includes('SUPABASE')));
   process.exit(1);
 }
 
+console.log(`URL Supabase: ${maskUrl(SUPABASE_URL)}`);
+console.log(`Chave Service Role: ${SUPABASE_SERVICE_ROLE_KEY.slice(0, 10)}...`);
 console.log(`MODO DE SINCRONIZAÇÃO: ${INITIAL_FULL_SYNC ? 'IMPORTAÇÃO COMPLETA' : 'SINCRONIZAÇÃO INCREMENTAL'}`);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
