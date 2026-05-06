@@ -31,17 +31,16 @@ function Index() {
 
   useEffect(() => {
     const fetchData = async () => {
-      // @ts-ignore - Catalog table newly created
-      const { data, error } = await supabase.from('catalog').select('*');
-      if (error) console.error(error);
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('catalog')
+        .select('*')
+        .order('created_at', { ascending: false });
       
-      if (!data || data.length === 0) {
-        await seedCatalog();
-        // @ts-ignore
-        const { data: newData } = await supabase.from('catalog').select('*');
-        setCatalog((newData as ContentItem[]) || []);
+      if (error) {
+        console.error('Error fetching catalog:', error);
       } else {
-        setCatalog(data as ContentItem[]);
+        setCatalog((data as ContentItem[]) || []);
       }
       setLoading(false);
     };
