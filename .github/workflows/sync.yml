@@ -25,4 +25,5 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          INITIAL_FULL_SYNC: ${{ vars.INITIAL_FULL_SYNC || 'false' }}
         run: node scripts/sync.js
