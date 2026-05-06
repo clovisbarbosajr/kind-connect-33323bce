@@ -44,12 +44,13 @@ function Index() {
     }
 
     console.log(`[Frontend] Fetching page ${currentPage} (range ${from}-${to}), Filter: ${activeFilter}, Search: ${searchTerm}`);
-    const { data, error, count, status } = await query;
+    const { data, error: fetchError, count, status } = await query;
     
-    if (error) {
-      console.error('[Frontend] Error fetching catalog:', error);
-      console.error('Stack Trace:', new Error().stack);
+    if (fetchError) {
+      console.error('[Frontend] Error fetching catalog:', fetchError);
+      setError(fetchError.message);
     } else {
+      setError(null);
       console.log(`[Frontend] Received ${data?.length || 0} items. Total count in DB: ${count}. Status: ${status}`);
       if (data && data.length > 0) {
         console.log('[Frontend] First item payload:', JSON.stringify(data[0], null, 2));
