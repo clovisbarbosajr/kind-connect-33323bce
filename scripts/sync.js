@@ -286,30 +286,61 @@ async function run() {
           const oldUrl = page.url();
           
           await page.evaluate(() => {
-            const nextSelectors = ['.pagination-next', 'a[rel="next"]', '.next-page', '.next', 'li.next a'];
+            const nextSelectors = [
+              '.pagination-next', 
+              'a[rel="next"]', 
+              '.next-page', 
+              '.next', 
+              'li.next a', 
+              'a.pagination-link:last-child',
+              '.pagination li:last-child a'
+            ];
+            
             let nextBtn = null;
             for (const selector of nextSelectors) {
               const el = document.querySelector(selector);
-              if (el) { nextBtn = el; break; }
+              if (el && el.offsetParent !== null) { nextBtn = el; break; }
             }
+            
             if (!nextBtn) {
               const allLinks = Array.from(document.querySelectorAll('a, button'));
               nextBtn = allLinks.find(el => {
                 const text = el.innerText.trim();
-                return text === 'Próxima' || text === 'Próximo' || text === '>' || text === '»';
+                return text === 'Próxima' || text === 'Próximo' || text === '>' || text === '»' || text.includes('Next');
               });
             }
-            if (nextBtn) nextBtn.click();
+
+            if (nextBtn) {
+              console.log('Clicando no botão de próxima página:', nextBtn.innerText);
+              nextBtn.click();
+            } else {
+              // Se não achou botão pra clicar, tenta achar um link com ?page=
+              const pageLinks = Array.from(document.querySelectorAll('a[href*="page="]'));
+              const nextPageNum = parseInt(new URL(window.location.href).searchParams.get('page') || '1') + 1;
+              const nextPageLink = pageLinks.find(a => a.getAttribute('href').includes(`page=${nextPageNum}`));
+              if (nextPageLink) {
+                console.log('Seguindo link direto para página:', nextPageNum);
+                nextPageLink.click();
+              }
+            }
           });
 
           // Aguardar URL mudar ou novos dados carregarem
           await Promise.race([
-            page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }),
-            page.waitForFunction((old) => window.location.href !== old, { timeout: 15000 }, oldUrl),
-            page.waitForTimeout(10000)
-          ]).catch(() => console.log('Aviso: Navegação de página demorou ou URL não mudou visivelmente.'));
+            page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20000 }),
+            page.waitForFunction((old) => window.location.href !== old, { timeout: 20000 }, oldUrl),
+            page.waitForTimeout(15000)
+          ]).catch(() => console.log('Aviso: Navegação demorou. Continuando mesmo assim.'));
           
-          await page.waitForTimeout(3000); // Pausa de segurança
+          const newUrl = page.url();
+          if (newUrl === oldUrl) {
+            console.log('[Paginação] URL não mudou após o clique. Tentando mudar via URL manualmente...');
+            const urlObj = new URL(oldUrl);
+            urlObj.searchParams.set('page', (currentPage + 1).toString());
+            await page.goto(urlObj.toString(), { waitUntil: 'networkidle' });
+          }
+
+          await page.waitForTimeout(5000); // Pausa para renderização JS (importante para window.buttonLinks)
           currentPage++;
         } catch (e) {
           console.log('Erro na navegação de próxima página:', e.message);
@@ -317,7 +348,7 @@ async function run() {
         }
       } else {
         hasNextPage = false;
-        console.log(currentPage >= maxPages ? `[Fim] Limite de páginas atingido.` : '[Fim] Próxima página não disponível.');
+        console.log(currentPage >= maxPages ? `[Fim] Limite de páginas atingido (${maxPages}).` : '[Fim] Próxima página não disponível.');
       }
     }
 
