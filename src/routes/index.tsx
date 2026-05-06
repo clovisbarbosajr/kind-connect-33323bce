@@ -177,8 +177,7 @@ function Index() {
                  onClick={() => {
                    console.log('Recarregando dados...');
                    setError(null);
-                   setPage(0);
-                   fetchData(true);
+                   fetchData();
                  }}
                  className="mt-4 px-6 py-2 border border-neon-green/30 text-neon-green text-[10px] font-black uppercase tracking-widest rounded-full hover:bg-neon-green hover:text-black transition-all"
                >
