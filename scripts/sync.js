@@ -6,10 +6,25 @@ import fs from 'fs';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('ERRO: Variáveis de ambiente SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configuradas.');
+  process.exit(1);
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
   realtime: { transport: WebSocket }
 });
+
+function maskUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.protocol}//${parsed.host.split('.')[0]}.supabase.co`;
+  } catch (e) {
+    return 'URL Inválida';
+  }
+}
+
 
 function generateSlug(title) {
   return title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').replace(/--+/g, '-').trim();
@@ -43,9 +58,33 @@ async function saveArtifact(page, name, type) {
 
 async function run() {
   console.log('--- INICIANDO CRAWLER DE VALIDAÇÃO REAL ---');
+  console.log(`[0/5] Testando conexão com Supabase: ${maskUrl(SUPABASE_URL)}`);
+  
+  try {
+    const { count, error: connError } = await supabase.from('movies').select('*', { count: 'exact', head: true });
+    if (connError) throw connError;
+    
+    console.log(`Conexão OK. Filmes atuais no banco: ${count}`);
+    
+    await supabase.from('system_health').insert({
+      source: 'crawler',
+      status: 'online',
+      message: 'Crawler iniciado com sucesso',
+      metadata: {
+        supabase_url: maskUrl(SUPABASE_URL),
+        current_movies: count,
+        start_time: new Date().toISOString()
+      }
+    });
+  } catch (e) {
+    console.error('FALHA DE CONEXÃO INICIAL COM SUPABASE:', e.message);
+    process.exit(1);
+  }
+
   const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
   const context = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36' });
   const page = await context.newPage();
+
 
   try {
     // PASSO 0: Desativar animações para evitar "element is not stable"
@@ -252,11 +291,35 @@ async function run() {
       finished_at: new Date().toISOString()
     });
 
+    await supabase.from('system_health').insert({
+      source: 'crawler',
+      status: 'success',
+      message: `Sync finalizado: ${imported} novos/atualizados, ${failed} falhas`,
+      metadata: {
+        imported,
+        failed,
+        total_detected: movieItems.length,
+        base_url: finalBaseUrl,
+        finish_time: new Date().toISOString()
+      }
+    });
+
     console.log(`Imported ${imported} movies`);
     process.exit(0);
 
   } catch (error) {
     console.error('FALHA NO CRAWLER:', error.message);
+    
+    await supabase.from('system_health').insert({
+      source: 'crawler',
+      status: 'error',
+      message: `Erro crítico no crawler: ${error.message}`,
+      metadata: {
+        error_stack: error.stack,
+        time: new Date().toISOString()
+      }
+    });
+
     await saveArtifact(page, 'critical-error', 'png');
     process.exit(1);
   } finally {
