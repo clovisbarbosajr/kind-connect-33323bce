@@ -164,58 +164,80 @@ def try_attr(page, selectors: list, attr: str = "src") -> str:
 
 # ─── GATEWAY ──────────────────────────────────────────────────────────────────
 
-def navigate_gateway(page):
+def click_novo_dominio(page) -> bool:
+    """Click 'IR PARA O NOVO DOMÍNIO' if present. Returns True if clicked."""
+    for text in ["IR PARA O NOVO DOMÍNIO", "Ir para o novo domínio", "NOVO DOMÍNIO", "novo domínio", "novo link"]:
+        try:
+            btn = page.locator(f"text={text}").first
+            if btn.is_visible(timeout=1500):
+                btn.click()
+                log.info("[gateway] clicked novo dominio: %r", text)
+                page.wait_for_timeout(5000)
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def navigate_gateway(page) -> str:
     """
-    Navigate through acesso-starck.com gateway buttons to reach the real site.
-    Steps that don't appear are safely skipped.
+    Navigate through gateway and all 'site moved' redirects.
+    Returns the final BASE_URL (scheme + host) of the real site.
     """
     log.info("[gateway] Opening %s", GATEWAY_URL)
     page.goto(GATEWAY_URL, wait_until="domcontentloaded", timeout=30_000)
     page.wait_for_timeout(5000)
 
-    # Step 1 – "IR PARA O NOVO DOMÍNIO" or similar
-    for text in [
-        "IR PARA O NOVO DOMÍNIO",
-        "Ir para o novo domínio",
-        "NOVO DOMÍNIO",
-        "Acessar novo domínio",
-    ]:
-        try:
-            btn = page.locator(f"text={text}").first
-            if btn.is_visible(timeout=2000):
-                btn.click()
-                log.info("[gateway] step1 clicked: %r", text)
-                page.wait_for_timeout(4000)
-                break
-        except Exception:
-            pass
+    # Step 1 – initial gateway "IR PARA O NOVO DOMÍNIO"
+    click_novo_dominio(page)
 
-    # Step 2 – First #nt-btn-ok / "Próximo"
+    # Step 2 – #nt-btn-ok / "Próximo"
     for sel in ["#nt-btn-ok", "button:has-text('Próximo')", "button:has-text('Next')", ".nt-ok"]:
         try:
             btn = page.locator(sel).first
             if btn.is_visible(timeout=2000):
                 btn.click()
-                log.info("[gateway] step2 clicked via %r", sel)
+                log.info("[gateway] step2 via %r", sel)
                 page.wait_for_timeout(4000)
                 break
         except Exception:
             pass
 
-    # Step 3 – Second #nt-btn-ok / "OK"
+    # Step 3 – second #nt-btn-ok / "OK"
     for sel in ["#nt-btn-ok", "button:has-text('OK')", "button:has-text('Confirmar')"]:
         try:
             btn = page.locator(sel).first
             if btn.is_visible(timeout=2000):
                 btn.click()
-                log.info("[gateway] step3 clicked via %r", sel)
+                log.info("[gateway] step3 via %r", sel)
                 page.wait_for_timeout(5000)
                 break
         except Exception:
             pass
 
-    close_any_popup(page)
-    log.info("[gateway] complete. Current URL: %s", page.url)
+    # Follow additional "site moved" redirects until we reach stable content
+    for _ in range(5):
+        page.wait_for_timeout(3000)
+        # If another "novo domínio" popup appears, follow it
+        if click_novo_dominio(page):
+            continue
+        # Close any Telegram/ad popups
+        close_any_popup(page)
+        # If page title looks like real content (not a redirect page), stop
+        try:
+            title = page.title().lower()
+            url = page.url
+            if "comunicado" not in title and "acesso" not in url and len(url) > 20:
+                break
+        except Exception:
+            pass
+
+    from urllib.parse import urlparse
+    final_url = page.url
+    parsed = urlparse(final_url)
+    real_base = f"{parsed.scheme}://{parsed.netloc}"
+    log.info("[gateway] complete. Final domain: %s", real_base)
+    return real_base
 
 
 # ─── CATALOG LISTING ──────────────────────────────────────────────────────────
@@ -766,14 +788,28 @@ def main():
         page = ctx.new_page()
 
         # ── Phase 1: Gateway ──────────────────────────────────────────
-        navigate_gateway(page)
+        real_base = navigate_gateway(page)
+
+        # Override BASE_URL globally with the real domain found
+        global BASE_URL
+        BASE_URL = real_base
+
+        sections = [
+            f"{BASE_URL}/",
+            f"{BASE_URL}/filmes/",
+            f"{BASE_URL}/series/",
+            f"{BASE_URL}/animes/",
+            f"{BASE_URL}/?year=2026",
+            f"{BASE_URL}/?year=2025",
+        ]
+        log.info("[gateway] Using BASE_URL = %s", BASE_URL)
 
         # ── Phase 2: Collect all title URLs ──────────────────────────
         log.info("\n[phase 2] Collecting title URLs from all sections...")
         all_urls: list = []
         seen_urls: set = set()
 
-        for section in CATALOG_SECTIONS:
+        for section in sections:
             urls = scrape_section(page, section)
             new  = [u for u in urls if u not in seen_urls]
             seen_urls.update(new)
