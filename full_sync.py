@@ -12,12 +12,19 @@ Usage:
 import re
 import time
 import logging
+import os
 from supabase import create_client
 
+# Log to both console and file
+LOG_FILE = os.path.join(os.path.dirname(__file__), "sync.log")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-7s  %(message)s",
     datefmt="%H:%M:%S",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(LOG_FILE, encoding="utf-8", mode="w"),
+    ]
 )
 log = logging.getLogger("inwise")
 
@@ -288,80 +295,81 @@ def navigate_gateway(page) -> str:
 
 # ─── CATALOG LISTING ──────────────────────────────────────────────────────────
 
-def get_card_urls(page) -> set:
+def dump_page_html(page, label="debug"):
+    """Save page HTML to file for inspection."""
+    try:
+        path = os.path.join(os.path.dirname(__file__), f"debug_{label}.html")
+        html = page.content()
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(html)
+        log.info("[debug] HTML salvo em %s (%d bytes)", path, len(html))
+    except Exception as e:
+        log.warning("[debug] falha ao salvar HTML: %s", e)
+
+
+def get_card_urls(page, base: str) -> set:
     """Extract all title detail URLs from the current listing page."""
     urls: set = set()
+    from urllib.parse import urlparse
+    host = urlparse(base).netloc
 
-    # First try specific content-path selectors
-    path_patterns = ["/filme/", "/serie/", "/anime/", "/filmes/", "/series/", "/animes/"]
-    selectors = [
-        "a[href*='/filme/']",
-        "a[href*='/serie/']",
-        "a[href*='/anime/']",
-        "a[href*='/filmes/']",
-        "a[href*='/series/']",
-        "a[href*='/animes/']",
-        ".item a[href]",
-        ".ml-item a[href]",
-        "article a[href]",
-        ".poster a[href]",
-        ".movies-list a[href]",
-        ".item-movie a[href]",
-        ".content-item a[href]",
-        ".card a[href]",
-        "h2 a[href]",
-        "h3 a[href]",
-        ".entry-title a[href]",
-        ".post-title a[href]",
-    ]
-    for sel in selectors:
-        try:
-            for el in page.locator(sel).all():
-                href = el.get_attribute("href") or ""
-                if href.startswith("/"):
-                    href = BASE_URL + href
-                if not href.startswith("http"):
-                    continue
-                # Accept links that contain known content path patterns OR
-                # look like a single-word slug under the same domain
-                if any(p in href for p in path_patterns):
-                    urls.add(href.split("?")[0].rstrip("/") + "/")
-        except Exception:
-            pass
+    # Collect ALL links on the page
+    try:
+        all_links = page.evaluate("""
+            () => Array.from(document.querySelectorAll('a[href]'))
+                       .map(a => a.href)
+                       .filter(h => h && h.startsWith('http'))
+        """)
+    except Exception:
+        all_links = []
 
-    # Fallback: grab ALL internal links that look like single-title slugs
-    if not urls:
-        try:
-            for el in page.locator("a[href]").all():
-                href = el.get_attribute("href") or ""
-                if href.startswith("/"):
-                    href = BASE_URL + href
-                if BASE_URL not in href:
-                    continue
-                path = href.replace(BASE_URL, "").lstrip("/")
-                # Single level path like "nome-do-filme/" or "nome-do-filme"
-                parts = [p for p in path.split("/") if p]
-                if len(parts) == 1 and len(parts[0]) > 4 and "?" not in parts[0]:
-                    urls.add(href.split("?")[0].rstrip("/") + "/")
-        except Exception:
-            pass
+    for href in all_links:
+        # Must be same domain
+        if host not in href:
+            continue
+        path = href.replace(f"https://{host}", "").replace(f"http://{host}", "").lstrip("/")
+        clean = href.split("?")[0].rstrip("/")
+
+        # Accept if path contains known content keywords
+        if any(k in path for k in ["/filme/", "/serie/", "/anime/", "/movie/", "/tv/", "/show/"]):
+            urls.add(clean + "/")
+            continue
+
+        # Accept single-segment slugs that look like content (not nav/category pages)
+        parts = [p for p in path.split("/") if p]
+        skip_words = {"filmes", "series", "animes", "page", "category", "tag",
+                      "wp-content", "wp-admin", "feed", "author", "login",
+                      "register", "search", "?", "#", "cdn-cgi"}
+        if (len(parts) == 1
+                and len(parts[0]) > 5
+                and parts[0] not in skip_words
+                and not parts[0].startswith("wp-")
+                and "-" in parts[0]):          # slugs almost always have hyphens
+            urls.add(clean + "/")
 
     return urls
 
 
-def scrape_section(page, section_url: str) -> list:
+def scrape_section(page, section_url: str, base: str) -> list:
     """Paginate through a catalog section and return all found title URLs."""
     all_urls: list = []
     seen: set = set()
     empty_streak = 0
     page_num = 1
+    first_page = True
 
     while True:
         if page_num == 1:
             url = section_url
         else:
-            base = section_url.rstrip("/")
-            url = f"{base}/page/{page_num}/"
+            # Handle URLs with query strings like /?year=2026
+            from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
+            parsed = urlparse(section_url)
+            if parsed.query:
+                # e.g. /?year=2026  → /page/2/?year=2026
+                url = f"{parsed.scheme}://{parsed.netloc}{parsed.path.rstrip('/')}/page/{page_num}/?{parsed.query}"
+            else:
+                url = f"{section_url.rstrip('/')}/page/{page_num}/"
 
         log.info("[catalog] page %d → %s", page_num, url)
         if not safe_goto(page, url):
@@ -369,24 +377,32 @@ def scrape_section(page, section_url: str) -> list:
             break
 
         # Stop on 404/empty
-        if "404" in page.title().lower() or "not found" in page.title().lower():
+        title_lower = page.title().lower()
+        if "404" in title_lower or "not found" in title_lower or "page not found" in title_lower:
             log.info("[catalog] 404 on page %d, stopping", page_num)
             break
 
-        new = get_card_urls(page) - seen
+        # Dump HTML of first page of first section for diagnosis
+        if first_page:
+            dump_page_html(page, label=section_url.split("/")[-2] or "home")
+            first_page = False
+
+        new = get_card_urls(page, base) - seen
+        log.info("[catalog] page %d found %d links (new: %d)", page_num, len(new) + len(seen), len(new))
+
         if not new:
             empty_streak += 1
-            if empty_streak >= 3:
-                log.info("[catalog] 3 empty pages in a row, stopping")
+            if empty_streak >= 2:
+                log.info("[catalog] 2 empty pages in a row, stopping")
                 break
         else:
             empty_streak = 0
             seen.update(new)
             all_urls.extend(new)
-            log.info("[catalog] +%d new URLs (total: %d)", len(new), len(all_urls))
+            log.info("[catalog] +%d URLs  total so far: %d", len(new), len(all_urls))
 
         page_num += 1
-        time.sleep(1.0)
+        time.sleep(1.2)
 
     return all_urls
 
@@ -853,7 +869,7 @@ def main():
         seen_urls: set = set()
 
         for section in sections:
-            urls = scrape_section(page, section)
+            urls = scrape_section(page, section, BASE_URL)
             new  = [u for u in urls if u not in seen_urls]
             seen_urls.update(new)
             all_urls.extend(new)
