@@ -47,6 +47,10 @@ CATALOG_SECTIONS = [
     f"{BASE_URL}/series/",
     f"{BASE_URL}/animes/",
     f"{BASE_URL}/?year=2026",
+    f"{BASE_URL}/?year=2025",
+    f"{BASE_URL}/?year=2024",
+    f"{BASE_URL}/?year=2023",
+    f"{BASE_URL}/?year=2022",
 ]
 
 db = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -169,19 +173,19 @@ def close_any_popup(page):
 
 
 def safe_goto(page, url: str, retries: int = 3) -> bool:
-    """Navigate to URL with retries and popup cleanup."""
+    """Navigate to URL, wait for JS content, then close popups."""
     for attempt in range(retries):
         try:
-            page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-            page.wait_for_timeout(2500)
+            page.goto(url, wait_until="networkidle", timeout=40_000)
+            page.wait_for_timeout(1500)
             close_any_popup(page)
-            page.wait_for_timeout(800)
-            # Check if still on gateway/popup — try close again
+            page.wait_for_timeout(500)
+            # If popup still visible, try again
             try:
-                if page.locator("text=Comunicado Importante").is_visible(timeout=500):
+                if page.locator("text=Comunicado Importante").is_visible(timeout=400):
                     page.keyboard.press("Escape")
                     page.mouse.click(10, 10)
-                    page.wait_for_timeout(800)
+                    page.wait_for_timeout(600)
             except Exception:
                 pass
             return True
@@ -312,6 +316,11 @@ def get_card_urls(page, base: str) -> set:
     from urllib.parse import urlparse
     host = urlparse(base).netloc
     urls: set = set()
+    # Wait for at least one catalog card to appear in the DOM
+    try:
+        page.wait_for_selector("a[href*='/catalog/']", timeout=8000)
+    except Exception:
+        pass  # may genuinely have no catalog links on this page
     try:
         all_links = page.evaluate("""
             () => Array.from(document.querySelectorAll('a[href]'))
@@ -629,7 +638,8 @@ def save_title(data: dict) -> bool:
 
         # Movie torrent options
         for t in torrents:
-            if not t.get("href"):
+            magnet_val = t.get("magnet") or t.get("href")
+            if not magnet_val:
                 continue
             try:
                 db.table("torrent_options").upsert({
@@ -637,7 +647,7 @@ def save_title(data: dict) -> bool:
                     "quality":    t.get("quality", "1080p"),
                     "audio_type": t.get("audio_type", "Dual Áudio"),
                     "language":   "Português | Inglês",
-                    "magnet":     t["href"],
+                    "magnet":     magnet_val,
                 }).execute()
             except Exception as exc:
                 log.debug("[db] torrent error: %s", exc)
@@ -729,11 +739,16 @@ def main():
         BASE_URL = real_base  # use real domain for all sections below
 
         sections = [
+            f"{BASE_URL}/filmes/",
+            f"{BASE_URL}/series/",
+            f"{BASE_URL}/animes/",
             f"{BASE_URL}/?year=2026",
             f"{BASE_URL}/?year=2025",
             f"{BASE_URL}/?year=2024",
             f"{BASE_URL}/?year=2023",
             f"{BASE_URL}/?year=2022",
+            f"{BASE_URL}/?year=2021",
+            f"{BASE_URL}/?year=2020",
             f"{BASE_URL}/",
         ]
         log.info("[gateway] Using BASE_URL = %s", BASE_URL)
