@@ -308,12 +308,10 @@ def dump_page_html(page, label="debug"):
 
 
 def get_card_urls(page, base: str) -> set:
-    """Extract all title detail URLs from the current listing page."""
-    urls: set = set()
+    """Extract /catalog/ title URLs from the current listing page."""
     from urllib.parse import urlparse
     host = urlparse(base).netloc
-
-    # Collect ALL links on the page
+    urls: set = set()
     try:
         all_links = page.evaluate("""
             () => Array.from(document.querySelectorAll('a[href]'))
@@ -324,28 +322,12 @@ def get_card_urls(page, base: str) -> set:
         all_links = []
 
     for href in all_links:
-        # Must be same domain
         if host not in href:
             continue
-        path = href.replace(f"https://{host}", "").replace(f"http://{host}", "").lstrip("/")
-        clean = href.split("?")[0].rstrip("/")
-
-        # Accept if path contains known content keywords
-        if any(k in path for k in ["/filme/", "/serie/", "/anime/", "/movie/", "/tv/", "/show/"]):
-            urls.add(clean + "/")
-            continue
-
-        # Accept single-segment slugs that look like content (not nav/category pages)
-        parts = [p for p in path.split("/") if p]
-        skip_words = {"filmes", "series", "animes", "page", "category", "tag",
-                      "wp-content", "wp-admin", "feed", "author", "login",
-                      "register", "search", "?", "#", "cdn-cgi"}
-        if (len(parts) == 1
-                and len(parts[0]) > 5
-                and parts[0] not in skip_words
-                and not parts[0].startswith("wp-")
-                and "-" in parts[0]):          # slugs almost always have hyphens
-            urls.add(clean + "/")
+        # The site uses /catalog/slug/ for all content
+        if "/catalog/" in href:
+            clean = href.split("?")[0].rstrip("/") + "/"
+            urls.add(clean)
 
     return urls
 
@@ -409,291 +391,184 @@ def scrape_section(page, section_url: str, base: str) -> list:
 
 # ─── TITLE PAGE SCRAPING ──────────────────────────────────────────────────────
 
-def detect_type(url: str, page) -> str:
-    if "/serie/" in url:
-        return "series"
-    if "/anime/" in url:
-        return "anime"
-    if "/filme/" in url:
-        return "movie"
-    # fallback: check content
-    try:
-        body = page.inner_text("body").lower()
-        if "temporada" in body or "episódio" in body:
-            return "series"
-    except Exception:
-        pass
-    return "movie"
-
-
-def extract_download_links(page) -> list:
+def extract_button_links(page) -> list:
     """
-    Collect all download/torrent links from the page content area.
-    Returns list of dicts: {href, label, quality, audio_type}
+    Extract download options from the site's buttonLinks JS variable.
+    Returns list of dicts with all torrent options for the title.
     """
+    import json
     results = []
-    seen = set()
-
-    # Strategy A: explicit quality text links in content
-    content_selectors = [
-        ".entry-content a",
-        ".wp-content a",
-        ".content a",
-        ".post-content a",
-        ".single-content a",
-        "article a",
-        ".download a",
-        ".downloads a",
-        "[class*='download'] a",
-        "[class*='torrent'] a",
-        "a[href^='magnet:']",
-        "a[href*='/download/']",
-        "a[href*='.torrent']",
-    ]
-
-    quality_keywords = ["1080", "720", "2160", "4k", "uhd", "fhd", "hd", "bluray", "blu-ray", "hdr"]
-
-    for sel in content_selectors:
-        try:
-            for link in page.locator(sel).all():
-                href = link.get_attribute("href") or ""
-                text = (link.inner_text() or "").strip()
-
-                if not href or href in seen:
+    try:
+        html = page.content()
+        # Match buttonLinks=[{...}] JS variable
+        m = re.search(r'buttonLinks\s*=\s*(\[.*?\])\s*[,;]', html, re.DOTALL)
+        if not m:
+            return results
+        raw = m.group(1)
+        # Fix JS object notation to valid JSON: key: → "key":
+        raw = re.sub(r'([{,]\s*)([a-zA-Z_]\w*)(\s*:)', r'\1"\2"\3', raw)
+        # Fix single quotes to double quotes
+        raw = raw.replace("'", '"')
+        data = json.loads(raw)
+        for item in data:
+            btn_info = item.get("btnInfo", [])
+            for opt in btn_info:
+                magnet = opt.get("url", "")
+                if not magnet:
                     continue
-
-                # Must look like a download link
-                is_magnet = href.startswith("magnet:")
-                is_quality_text = any(q in text.lower() for q in quality_keywords)
-                is_quality_url  = any(q in href.lower() for q in quality_keywords)
-                is_dl_path = any(p in href for p in ["/download/", ".torrent", "/torrent/"])
-
-                if not (is_magnet or is_quality_text or is_quality_url or is_dl_path):
-                    continue
-
-                seen.add(href)
-
-                # Resolve relative URLs
-                if href.startswith("/"):
-                    href = BASE_URL + href
-
-                quality = "1080p"
-                for q in ["4K", "2160p", "1080p", "720p", "480p", "HDR", "UHD", "FHD"]:
-                    if q.lower() in text.lower() or q.lower() in href.lower():
-                        quality = q
-                        break
-
-                audio_type = "Dual Áudio"
-                tl = text.lower()
-                if "leg" in tl:
-                    audio_type = "Legendado"
-                elif "nacional" in tl or "nacional" in href.lower():
-                    audio_type = "Nacional"
-                elif "dub" in tl:
-                    audio_type = "Dublado"
-
+                audio = opt.get("audioType", "Dual Áudio")
+                res   = opt.get("resolution", "1080p")
+                size  = opt.get("size", "")
+                codec = opt.get("dynamicRange", "")
+                ftype = opt.get("fileType", "movie")
                 results.append({
-                    "href": href,
-                    "label": text[:120] or quality,
-                    "quality": quality,
-                    "audio_type": audio_type,
+                    "magnet":     magnet,
+                    "quality":    res,
+                    "audio_type": audio,
+                    "size":       size,
+                    "codec":      codec,
+                    "file_type":  ftype,
                 })
-        except Exception:
-            pass
-
-    log.debug("[links] found %d download links", len(results))
+    except Exception as e:
+        log.debug("[btnlinks] parse error: %s", e)
     return results
 
 
-def parse_episodes_from_links(links: list) -> dict:
-    """
-    Group download links into seasons/episodes by detecting patterns like:
-    "EPISÓDIO 01: 1080p", "EP 03 DUAL", "EPISÓDIOS 01 E 02: 1080p", "S01E05"
-    Returns {season_number: [{"episode_number": N, "title": T, "href": H, "quality": Q, "audio": A}]}
-    """
-    seasons: dict = {}
-    current_season = 1
-
-    for link in links:
-        label = link["label"]
-        href  = link["href"]
-
-        # Detect season change
-        sm = re.search(r"temporada\s*(\d+)", label.lower())
-        if sm:
-            current_season = int(sm.group(1))
-
-        # S01E05 pattern
-        sxe = re.search(r"s(\d+)e(\d+)", label.lower())
-        if sxe:
-            sn = int(sxe.group(1))
-            en = int(sxe.group(2))
-            seasons.setdefault(sn, []).append({
-                "episode_number": en,
-                "title": label,
-                "href": href,
-                "quality": link["quality"],
-                "audio_type": link["audio_type"],
-            })
-            continue
-
-        # "EPISÓDIO(S) 01 (E 02):" pattern
-        ep_m = re.search(r"ep[isód\w]*\s*(\d{1,3})(?:\s+e\s+(\d{1,3}))?", label.lower())
-        if ep_m:
-            en1 = int(ep_m.group(1))
-            en2 = int(ep_m.group(2)) if ep_m.group(2) else None
-            seasons.setdefault(current_season, []).append({
-                "episode_number": en1,
-                "title": label,
-                "href": href,
-                "quality": link["quality"],
-                "audio_type": link["audio_type"],
-            })
-            if en2:  # double-episode link (e.g. "EP 01 e 02")
-                seasons.setdefault(current_season, []).append({
-                    "episode_number": en2,
-                    "title": label,
-                    "href": href,
-                    "quality": link["quality"],
-                    "audio_type": link["audio_type"],
-                })
-            continue
-
-        # Pure quality link with no episode number → movie torrent (handled elsewhere)
-
-    return seasons
-
-
 def scrape_title(page, url: str) -> dict | None:
-    """Scrape a full title page and return a structured dict."""
+    """Scrape a catalog title page and return structured data."""
     log.info("[title] %s", url)
     if not safe_goto(page, url):
         return None
 
     try:
-        title_type = detect_type(url, page)
-
-        # ── Title text ──
-        title_text = try_text(page, [
-            "h1.title", "h1.movie-title", "h1",
-            ".title h1", ".info h1", ".data h1",
-            ".sheader h1", ".single-title",
-        ])
-        if not title_text:
-            parts = url.rstrip("/").split("/")
-            title_text = (parts[-1] or parts[-2]).replace("-", " ").title()
-
-        # ── Poster ──
-        poster = try_attr(page, [
-            ".poster img", ".film-poster img", ".movie-thumbnail img",
-            "img.attachment-poster", "img[itemprop='image']",
-            ".cover img", ".thumb img", ".content-poster img",
-            "img[class*='poster']", "img[class*='cover']",
-        ])
-        # Try og:image as fallback
-        if not poster:
-            try:
-                og = page.locator("meta[property='og:image']").get_attribute("content", timeout=600)
-                if og:
-                    poster = og
-            except Exception:
-                pass
-
-        # ── Backdrop ──
-        backdrop = try_attr(page, [
-            ".backdrop img", ".header-background img", ".hero-image img", ".banner img",
-            "img[class*='backdrop']", "img[class*='background']",
-        ])
-        if not backdrop:
-            # Try CSS background-image
-            try:
-                style = page.locator(
-                    ".sheader, .hero, .backdrop, [class*='background'], [class*='header']"
-                ).first.get_attribute("style", timeout=600) or ""
-                m = re.search(r"url\(['\"]?(.+?)['\"]?\)", style)
-                if m:
-                    backdrop = m.group(1)
-            except Exception:
-                pass
-        if not backdrop:
-            backdrop = poster
-
-        # ── Synopsis ──
-        synopsis = try_text(page, [
-            "p.sinopsis", ".sinopsis", ".synopsis", ".description p",
-            ".overview", ".plot", "[itemprop='description']",
-            ".wp-content p", ".entry-content p",
-            ".info-content p", ".summary p",
-        ])
-
-        # ── IMDb rating ──
-        rating_text = try_text(page, [
-            ".imdb span", "span.imdb", ".rating span",
-            "[class*='imdb']", "[class*='rating']", ".vote span",
-        ])
-        imdb_rating = None
-        if rating_text:
-            m = re.search(r"(\d+\.?\d*)", rating_text)
-            if m:
-                val = float(m.group(1))
-                # Normalise: some sites show "86" meaning 8.6
-                if val > 10:
-                    val /= 10
-                imdb_rating = round(val, 1)
-
-        # ── Year ──
-        year_text = try_text(page, [
-            ".year", "span.year", ".date", ".release-year",
-            "[class*='year']", "[class*='date']",
-        ])
-        year = None
-        if year_text:
-            m = re.search(r"(20\d{2}|19\d{2})", year_text)
-            if m:
-                year = int(m.group(1))
-
-        # ── Genres ──
-        genres: list = []
-        try:
-            for el in page.locator(
-                ".genres a, .genre a, [class*='genre'] a, .cats a, .categories a"
-            ).all():
-                g = el.inner_text().strip()
-                if g and len(g) < 60:
-                    genres.append(g)
-        except Exception:
-            pass
+        html = page.content()
 
         # ── Slug from URL ──
         parts = url.rstrip("/").split("/")
         url_slug = next((p for p in reversed(parts) if p), "")
-        if not url_slug or len(url_slug) < 2:
-            url_slug = slugify(title_text)
 
-        # ── Download links ──
-        dl_links = extract_download_links(page)
+        # ── Title ──
+        title_text = try_text(page, ["h1", ".title", ".movie-title", "[class*='title'] h1"])
+        if not title_text:
+            # Try JS: find title in buttonLinks or page JS vars
+            m = re.search(r'buttonLinks\s*=\s*\[\s*\{[^}]*title\s*:\s*["\']([^"\']+)', html)
+            if m:
+                title_text = m.group(1)
+        if not title_text:
+            title_text = url_slug.replace("-", " ").title()
+
+        # ── Type: movie / series / anime ──
+        title_type = "movie"
+        body_lower = html.lower()
+        if "temporada" in body_lower or "episódio" in body_lower or "episodio" in body_lower:
+            title_type = "series"
+        try:
+            type_el = try_text(page, ["[class*='type']", "[class*='genre']", ".cat", ".tag"])
+            if "anime" in (type_el or "").lower() or "anime" in body_lower[:500]:
+                title_type = "anime"
+        except Exception:
+            pass
+
+        # ── Poster: try multiple strategies ──
+        poster = None
+        # 1. og:image meta tag
+        try:
+            poster = page.locator("meta[property='og:image']").get_attribute("content", timeout=800)
+        except Exception:
+            pass
+        # 2. imgBk JS variable (slide images)
+        if not poster:
+            m = re.search(r'imgBk\s*=\s*\[([^\]]+)\]', html)
+            if m:
+                imgs = re.findall(r'["\']([^"\']+\.(?:jpg|jpeg|png|webp))["\']', m.group(1))
+                if imgs:
+                    src = imgs[0]
+                    poster = src if src.startswith("http") else f"https://www.starckfilmes-v11.com{src}"
+        # 3. first <img> on page
+        if not poster:
+            poster = try_attr(page, ["img[src*='img/']", "img[src*='poster']", "img[src*='thumb']", "img"])
+
+        # ── Backdrop (use poster as fallback) ──
+        backdrop = poster
+        try:
+            m2 = re.search(r'imgBk\s*=\s*\[([^\]]+)\]', html)
+            if m2:
+                imgs = re.findall(r'["\']([^"\']+\.(?:jpg|jpeg|png|webp))["\']', m2.group(1))
+                if imgs:
+                    src = imgs[0]
+                    backdrop = src if src.startswith("http") else f"https://www.starckfilmes-v11.com{src}"
+        except Exception:
+            pass
+
+        # ── Synopsis ──
+        synopsis = try_text(page, [
+            "[class*='sinop']", "[class*='synopsis']", "[class*='description']",
+            "[class*='overview']", "[class*='plot']", "[itemprop='description']",
+            "p",
+        ])
+
+        # ── IMDb rating ──
+        imdb_rating = None
+        rating_text = try_text(page, ["[class*='imdb']", "[class*='rating']", "[class*='score']", "[class*='nota']"])
+        if not rating_text:
+            m3 = re.search(r'imdb["\s:]+(\d+\.?\d*)', html, re.IGNORECASE)
+            if m3:
+                rating_text = m3.group(1)
+        if rating_text:
+            m4 = re.search(r"(\d+\.?\d*)", rating_text)
+            if m4:
+                val = float(m4.group(1))
+                if val > 10:
+                    val /= 10
+                imdb_rating = round(val, 1)
+
+        # ── Year: extract from URL slug (slug often ends with -YYYY-DD-MM-YYYY) ──
+        year = None
+        ym = re.search(r'-(20\d{2}|19\d{2})-', url_slug)
+        if ym:
+            year = int(ym.group(1))
+        if not year:
+            yt = try_text(page, ["[class*='year']", "[class*='date']", "[class*='release']"])
+            if yt:
+                ym2 = re.search(r"(20\d{2}|19\d{2})", yt)
+                if ym2:
+                    year = int(ym2.group(1))
+
+        # ── Genres ──
+        genres: list = []
+        try:
+            for el in page.locator("a[href*='genre'], a[href*='genero'], [class*='genre'] a, [class*='tag'] a").all():
+                g = el.inner_text().strip()
+                if g and 2 < len(g) < 50:
+                    genres.append(g)
+        except Exception:
+            pass
+        # Also try from URL query params in page links
+        if not genres:
+            for g in re.findall(r'genre=([^&"\']+)', html):
+                genres.append(g.replace("-", " ").title())
+            genres = list(dict.fromkeys(genres))[:10]
+
+        # ── Download links from buttonLinks JS ──
+        btn_links = extract_button_links(page)
+        log.info("[title] %d torrent options found", len(btn_links))
 
         movie_torrents: list = []
         series_seasons: dict = {}
 
         if title_type in ("series", "anime"):
-            series_seasons = parse_episodes_from_links(dl_links)
-            # If we couldn't detect episode numbers, put all links as season-1 episodes
-            if not series_seasons and dl_links:
-                series_seasons = {
-                    1: [
-                        {
-                            "episode_number": i + 1,
-                            "title": lnk["label"],
-                            "href": lnk["href"],
-                            "quality": lnk["quality"],
-                            "audio_type": lnk["audio_type"],
-                        }
-                        for i, lnk in enumerate(dl_links)
-                    ]
-                }
+            # Group by episode — check if links have episode info in audio_type or codec field
+            # For now, put all as season 1 torrent options (series page = whole season pack)
+            for i, lnk in enumerate(btn_links):
+                series_seasons.setdefault(1, []).append({
+                    "episode_number": i + 1,
+                    "title": f"{lnk['quality']} • {lnk['audio_type']}",
+                    "href":  lnk["magnet"],
+                    "quality": lnk["quality"],
+                    "audio_type": lnk["audio_type"],
+                })
         else:
-            movie_torrents = dl_links
+            movie_torrents = btn_links
 
         return {
             "title":       title_text[:255],
@@ -854,12 +729,12 @@ def main():
         BASE_URL = real_base  # use real domain for all sections below
 
         sections = [
-            f"{BASE_URL}/",
-            f"{BASE_URL}/filmes/",
-            f"{BASE_URL}/series/",
-            f"{BASE_URL}/animes/",
             f"{BASE_URL}/?year=2026",
             f"{BASE_URL}/?year=2025",
+            f"{BASE_URL}/?year=2024",
+            f"{BASE_URL}/?year=2023",
+            f"{BASE_URL}/?year=2022",
+            f"{BASE_URL}/",
         ]
         log.info("[gateway] Using BASE_URL = %s", BASE_URL)
 
