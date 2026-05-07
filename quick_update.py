@@ -198,8 +198,10 @@ def main():
     saved = updated = failed = 0
 
     with sync_playwright() as pw:
+        # Run headless when no terminal is attached (scheduled task)
+        is_interactive = sys.stdin.isatty()
         browser = pw.chromium.launch(
-            headless=False,
+            headless=not is_interactive,
             args=["--disable-blink-features=AutomationControlled"],
         )
         ctx = browser.new_context(
@@ -251,7 +253,15 @@ def main():
     log.info("\n" + "=" * 60)
     log.info("  UPDATE COMPLETE:  %d new  |  %d updated  |  %d failed", saved, updated, failed)
     log.info("=" * 60)
-    input("\nPressione ENTER para fechar...")
+
+    # Write compact daily summary to separate file (easy audit)
+    summary_file = os.path.join(os.path.dirname(__file__), "update_summary.log")
+    with open(summary_file, "a", encoding="utf-8") as f:
+        f.write(f"{time.strftime('%Y-%m-%d %H:%M')}  new={saved}  updated={updated}  failed={failed}\n")
+
+    # If running interactively (terminal attached), pause; otherwise exit silently
+    if sys.stdin.isatty():
+        input("\nPressione ENTER para fechar...")
 
 
 if __name__ == "__main__":
