@@ -127,7 +127,7 @@ async function run() {
   try {
     // 1. Bypass inicial para pegar a URL base real
     console.log('[1] Realizando bypass do gateway...');
-    await page.goto('https://acesso-starck.com', { waitUntil: 'networkidle' });
+    await page.goto('https://www.starckfilmes-v11.com', { waitUntil: 'networkidle' });
     
     // Simular o fluxo de bypass (simplificado aqui, reusando lógica anterior se necessário)
     await page.locator('#alert').click({ force: true }).catch(() => {});
