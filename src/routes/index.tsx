@@ -1,117 +1,87 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Info, Search, Menu, User, Star, ChevronRight, ChevronLeft, Volume2, Plus } from "lucide-react";
+import { Play, Search, Menu, User, Star, Plus, ChevronDown, Bell, Globe } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { TitleRow } from "@/components/TitleRow";
+import { InwiseLogo } from "@/components/InwiseLogo";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu";
 
 export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const MOCK_TITLES = [
-  { id: '1', slug: 'breaking-bad', title: 'Breaking Bad', year: 2008, imdb_rating: 9.5, type: 'series', backdrop: 'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=1000', poster: 'https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=400', synopsis: "Um professor de química com câncer terminal decide produzir metanfetamina para garantir o futuro de sua família." },
-  { id: '2', slug: 'the-witcher', title: 'The Witcher', year: 2019, imdb_rating: 8.1, type: 'series', backdrop: 'https://images.unsplash.com/photo-1616466753066-512c14041d8e?q=80&w=1000', poster: 'https://images.unsplash.com/photo-1616466753066-512c14041d8e?q=80&w=400', synopsis: "O mutante Geralt de Rívia é um caçador de monstros que luta para encontrar seu lugar em um mundo onde as pessoas costumam ser mais perversas do que as feras." },
-  { id: '3', slug: 'inception', title: 'Inception', year: 2010, imdb_rating: 8.8, type: 'movie', backdrop: 'https://images.unsplash.com/photo-1604975712543-41a3199859cd?q=80&w=1000', poster: 'https://images.unsplash.com/photo-1604975712543-41a3199859cd?q=80&w=400', synopsis: "Dom Cobb é um ladrão habilidoso que rouba segredos valiosos das profundezas do subconsciente durante o estado de sono." },
-  { id: '4', slug: 'interstellar', title: 'Interstellar', year: 2014, imdb_rating: 8.7, type: 'movie', backdrop: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?q=80&w=1000', poster: 'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?q=80&w=400' },
-  { id: '5', slug: 'stranger-things', title: 'Stranger Things', year: 2016, imdb_rating: 8.7, type: 'series', backdrop: 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=1000', poster: 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=400' },
-  { id: '6', slug: 'the-last-of-us', title: 'The Last of Us', year: 2023, imdb_rating: 8.8, type: 'series', backdrop: 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=1000', poster: 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=400' },
+const MOCK_TITLES: any[] = [
+  {
+    id: 'mock-1',
+    title: 'Deadpool & Wolverine',
+    slug: 'deadpool-wolverine',
+    backdrop: 'https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?q=80&w=1600',
+    poster: 'https://images.unsplash.com/photo-1612036782180-6f0b6cd846fe?q=80&w=600',
+    imdb_rating: 8.2, year: 2024, type: 'movie',
+    synopsis: 'Um herói irresponsável e um mutante rabugento unem forças para salvar o multiverso.'
+  },
+  {
+    id: 'mock-2',
+    title: 'Duna: Parte Dois',
+    slug: 'duna-parte-2',
+    backdrop: 'https://images.unsplash.com/photo-1506466010722-395aa2bef877?q=80&w=1600',
+    poster: 'https://images.unsplash.com/photo-1506466010722-395aa2bef877?q=80&w=600',
+    imdb_rating: 8.8, year: 2024, type: 'movie',
+    synopsis: 'Paul Atreides se une a Chani e aos Fremen em uma guerra de vingança.'
+  },
+  {
+    id: 'mock-3',
+    title: 'House of the Dragon',
+    slug: 'house-of-the-dragon',
+    backdrop: 'https://images.unsplash.com/photo-1599728611361-9f9392211463?q=80&w=1600',
+    poster: 'https://images.unsplash.com/photo-1599728611361-9f9392211463?q=80&w=600',
+    imdb_rating: 8.5, year: 2024, type: 'series',
+    synopsis: 'A história da família Targaryen duzentos anos antes dos eventos de Game of Thrones.'
+  },
+  {
+    id: 'mock-4',
+    title: 'Furiosa: Uma Saga Mad Max',
+    slug: 'furiosa',
+    backdrop: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=1600',
+    poster: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=600',
+    imdb_rating: 7.9, year: 2024, type: 'movie',
+    synopsis: 'A jovem Furiosa é sequestrada de seu lar e deve sobreviver a grandes provações.'
+  },
+  {
+    id: 'mock-5',
+    title: 'Solo Leveling',
+    slug: 'solo-leveling',
+    backdrop: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1600',
+    poster: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=600',
+    imdb_rating: 8.4, year: 2024, type: 'series',
+    synopsis: 'O caçador mais fraco recebe uma chance única de subir de nível sem limites.'
+  }
 ];
 
-function MovieRow({ title, items, loading }: { title: string, items: any[], loading: boolean }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const scroll = (direction: 'left' | 'right') => {
-    if (scrollRef.current) {
-      const { scrollLeft, clientWidth } = scrollRef.current;
-      const scrollTo = direction === 'left' ? scrollLeft - clientWidth : scrollLeft + clientWidth;
-      scrollRef.current.scrollTo({ left: scrollTo, behavior: 'smooth' });
-    }
-  };
-
-  return (
-    <div className="space-y-4 mb-10 relative group">
-      <div className="flex items-center justify-between px-6 lg:px-12">
-        <h2 className="text-xl font-bold tracking-tight">{title}</h2>
-        <Link to="/" className="text-xs font-bold text-gray-500 hover:text-primary transition uppercase tracking-widest">Ver Tudo</Link>
-      </div>
-
-      <div className="relative group">
-        <button 
-          onClick={() => scroll('left')}
-          className="absolute left-0 top-0 bottom-0 z-40 bg-black/50 w-12 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          <ChevronLeft className="w-8 h-8" />
-        </button>
-        
-        <div 
-          ref={scrollRef}
-          className="flex overflow-x-auto gap-4 px-6 lg:px-12 no-scrollbar scroll-smooth"
-        >
-          {loading ? (
-            Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="min-w-[180px] sm:min-w-[220px] aspect-[2/3] rounded-xl bg-zinc-900" />
-            ))
-          ) : (
-            items.map((item) => (
-              <Link 
-                key={item.id} 
-                to="/watch/$slug" 
-                params={{ slug: item.slug }}
-                className="min-w-[180px] sm:min-w-[220px] group/card relative"
-              >
-                <motion.div 
-                  whileHover={{ scale: 1.05, y: -5 }}
-                  className="relative aspect-[2/3] rounded-xl overflow-hidden shadow-2xl transition-all"
-                >
-                  <img src={item.poster || item.backdrop} className="w-full h-full object-cover" alt={item.title} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60" />
-                  
-                  {/* Badge Row */}
-                  <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
-                    <Badge className="bg-primary/90 text-black text-[9px] font-black border-none px-1.5 py-0 h-4">4K</Badge>
-                    <Badge className="bg-zinc-900/90 text-white text-[9px] font-black border-none px-1.5 py-0 h-4 uppercase">DUAL</Badge>
-                  </div>
-
-                  {/* Rating Badge */}
-                  <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded flex items-center gap-1">
-                    <Star className="w-2.5 h-2.5 text-yellow-500 fill-current" />
-                    <span className="text-[10px] font-bold">{item.imdb_rating || 'N/A'}</span>
-                  </div>
-
-                  {/* Overlay Info */}
-                  <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover/card:opacity-100 transition-opacity flex flex-col justify-center items-center">
-                    <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-black">
-                      <Play className="w-6 h-6 fill-current ml-1" />
-                    </div>
-                  </div>
-                </motion.div>
-                <div className="mt-3">
-                  <h3 className="font-bold text-sm truncate group-hover/card:text-primary transition">{item.title}</h3>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">{item.year} • {item.type === 'movie' ? 'Filme' : 'Série'}</p>
-                </div>
-              </Link>
-            ))
-          )}
-        </div>
-
-        <button 
-          onClick={() => scroll('right')}
-          className="absolute right-0 top-0 bottom-0 z-40 bg-black/50 w-12 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          <ChevronRight className="w-8 h-8" />
-        </button>
-      </div>
-    </div>
-  );
-}
+const GENRES = ['Ação', 'Animação', 'Comédia', 'Documentário', 'Drama', 'Ficção Científica', 'Guerra', 'Musical', 'Mistério', 'Policial', 'Romance', 'Terror', 'Western', 'Biografia'];
 
 function Index() {
   const [titles, setTitles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [heroIndex, setHeroIndex] = useState(0);
+  const [scrolled, setScrolled] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     async function fetchTitles() {
@@ -120,8 +90,7 @@ function Index() {
           .from('titles')
           .select('*')
           .order('created_at', { ascending: false })
-          .limit(40);
-        
+          .limit(80);
         if (error) throw error;
         setTitles(data || []);
       } catch (e) {
@@ -133,215 +102,213 @@ function Index() {
     fetchTitles();
   }, []);
 
-  const displayTitles = titles.length > 0 ? titles : MOCK_TITLES;
-  
+  const displayTitles = (titles.length > 0 || loading) ? titles : MOCK_TITLES;
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setHeroIndex(prev => (prev + 1) % Math.min(displayTitles.length, 5));
-    }, 8000);
-    return () => clearInterval(timer);
+    if (displayTitles.length > 0) {
+      const timer = setInterval(() => {
+        setHeroIndex(prev => (prev + 1) % Math.min(displayTitles.length, 6));
+      }, 8000);
+      return () => clearInterval(timer);
+    }
   }, [displayTitles]);
 
-  const hero = displayTitles[heroIndex];
+  const hero = displayTitles[heroIndex] || (loading ? null : MOCK_TITLES[0]);
+  const movies   = displayTitles.filter(t => t.type === 'movie');
+  const series   = displayTitles.filter(t => t.type === 'series');
+  const animes   = displayTitles.filter(t => t.type === 'anime');
+  const topRated = [...displayTitles].sort((a, b) => (Number(b.imdb_rating) || 0) - (Number(a.imdb_rating) || 0));
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-primary selection:text-black no-scrollbar overflow-x-hidden">
-      {/* Navbar - Starck Filmes Style */}
-      <nav className="fixed top-0 left-0 right-0 z-50 transition-colors duration-500 bg-gradient-to-b from-black/95 via-black/50 to-transparent">
-        <div className="flex items-center justify-between px-6 lg:px-12 py-4">
-          <div className="flex items-center gap-12">
-            <Link to="/" className="text-3xl font-black text-primary tracking-tighter drop-shadow-[0_0_15px_rgba(200,255,0,0.4)]">STARCK</Link>
-            
-            <div className="hidden xl:flex items-center gap-8 text-[13px] font-bold uppercase tracking-wider text-gray-300">
-              <Link to="/" className="hover:text-primary transition-colors">Início</Link>
-              
-              <div className="group relative cursor-pointer hover:text-primary transition-colors py-2">
-                Gênero
-                <div className="absolute top-full -left-4 hidden group-hover:grid grid-cols-2 w-64 bg-zinc-950/98 border border-zinc-800/50 p-4 rounded-xl shadow-2xl mt-0 backdrop-blur-xl">
-                  {['Ação', 'Animação', 'Comédia', 'Documentário', 'Drama', 'Ficção Científica', 'Guerra', 'Musical', 'Mistério', 'Policial', 'Romance', 'Terror'].map(g => (
-                    <div key={g} className="p-2 hover:bg-zinc-800 rounded-lg text-[11px] transition-all hover:translate-x-1">{g}</div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="group relative cursor-pointer hover:text-primary transition-colors py-2">
-                Áudio
-                <div className="absolute top-full -left-4 hidden group-hover:flex flex-col w-48 bg-zinc-950/98 border border-zinc-800/50 p-4 rounded-xl shadow-2xl mt-0 backdrop-blur-xl">
-                  {['Dublado', 'Legendado', 'Dual Áudio'].map(a => (
-                    <div key={a} className="p-2 hover:bg-zinc-800 rounded-lg text-[11px] transition-all hover:translate-x-1">{a}</div>
-                  ))}
-                </div>
-              </div>
-
-              <Link to="/" className="hover:text-primary transition-colors">Filmes</Link>
-              <Link to="/" className="hover:text-primary transition-colors">Séries</Link>
-              <Link to="/" className="hover:text-primary transition-colors">Animes</Link>
-              <Link to="/" className="hover:text-primary transition-colors">Top IMDb</Link>
-              <Link to="/" className="hover:text-primary transition-colors text-primary/80">Lançamentos 2026</Link>
-            </div>
+      {/* Navbar */}
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 px-6 lg:px-12 py-4 flex items-center justify-between ${scrolled ? 'bg-black shadow-2xl' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
+        <div className="flex items-center gap-10">
+          <Link to="/"><InwiseLogo size="md" /></Link>
+          <div className="hidden lg:flex items-center gap-6 text-[11px] font-black uppercase tracking-widest text-zinc-300">
+            <Link to="/" className="text-white hover:text-primary transition-colors">INÍCIO</Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-1 hover:text-white outline-none uppercase">
+                Gêneros <ChevronDown className="w-3 h-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-zinc-950/95 border-zinc-800 grid grid-cols-2 w-64 p-2 backdrop-blur-xl">
+                {GENRES.map(g => (
+                  <DropdownMenuItem key={g} className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-primary hover:bg-zinc-900 focus:bg-zinc-900 cursor-pointer">{g}</DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-1 hover:text-white outline-none uppercase">
+                Áudio <ChevronDown className="w-3 h-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-zinc-950/95 border-zinc-800 w-40 p-2 backdrop-blur-xl">
+                {['Dublado', 'Legendado', 'Dual Áudio'].map(a => (
+                  <DropdownMenuItem key={a} className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-primary cursor-pointer">{a}</DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Link to="/" className="hover:text-white transition-colors">FILMES</Link>
+            <Link to="/" className="hover:text-white transition-colors">SÉRIES</Link>
+            <Link to="/" className="hover:text-white transition-colors">ANIMES</Link>
+            <Link to="/" className="hover:text-white transition-colors">TOP IMDB</Link>
+            <Link to="/" className="text-[#c8ff00] drop-shadow-[0_0_10px_rgba(200,255,0,0.3)]">LANÇAMENTOS 2026</Link>
           </div>
-
-          <div className="flex items-center gap-6">
-            <div className="relative hidden md:block group">
-              <input 
-                type="text" 
-                placeholder="Pesquisar títulos..." 
-                className="bg-zinc-900/50 border border-zinc-800/50 rounded-full pl-10 pr-4 py-1.5 text-xs w-48 focus:w-64 transition-all focus:border-primary/50 outline-none"
-              />
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-focus-within:text-primary transition-colors" />
-            </div>
-            <User className="w-5 h-5 cursor-pointer text-gray-300 hover:text-white" />
-            <Menu className="xl:hidden w-6 h-6 cursor-pointer" />
+        </div>
+        <div className="flex items-center gap-5">
+          <div className="relative group hidden sm:block">
+            <input type="text" placeholder="Buscar filmes, séries..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-zinc-900/60 border border-zinc-800/60 rounded-full pl-10 pr-4 py-2 text-[10px] font-bold uppercase tracking-widest w-48 focus:w-72 transition-all focus:border-primary/50 outline-none text-white placeholder:text-zinc-600" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-primary transition-colors" />
           </div>
+          <Bell className="w-5 h-5 text-zinc-400 hover:text-white cursor-pointer transition-colors" />
+          <DropdownMenu>
+            <DropdownMenuTrigger className="outline-none">
+              <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/20 hover:border-primary/50 transition-all cursor-pointer">
+                <User className="w-5 h-5 text-primary" />
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-zinc-950 border-zinc-800 w-44 p-2">
+              <DropdownMenuItem className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Favoritos</DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-zinc-800" />
+              <DropdownMenuItem asChild>
+                <Link to="/admin" className="text-[10px] font-bold uppercase tracking-wider text-primary cursor-pointer w-full">Painel Admin</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/debug" className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 cursor-pointer w-full">Debug</Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Menu className="lg:hidden w-6 h-6 cursor-pointer" />
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <header className="relative h-screen w-full overflow-hidden">
+      {/* Hero */}
+      <header className="relative h-[85vh] md:h-screen w-full overflow-hidden">
         <AnimatePresence mode="wait">
-          <motion.div
-            key={hero?.id || 'skeleton'}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 1 }}
-            className="absolute inset-0"
-          >
+          <motion.div key={hero?.id || 'skeleton'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 1.5 }} className="absolute inset-0">
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/40 to-transparent z-10" />
-            
-            {loading ? (
-              <Skeleton className="w-full h-full bg-zinc-900" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/50 to-transparent z-10" />
+            {loading || !hero ? (
+              <div className="w-full h-full bg-zinc-950">
+                <div className="w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(200,255,0,0.05),transparent_50%)]" />
+              </div>
             ) : (
-              <img 
-                src={hero.backdrop} 
-                className="w-full h-full object-cover" 
-                alt={hero.title} 
-              />
+              <img src={hero.backdrop || hero.poster} className="w-full h-full object-cover scale-105" alt={hero.title} />
             )}
           </motion.div>
         </AnimatePresence>
 
-        <div className="absolute bottom-[15%] left-6 lg:left-12 z-20 max-w-3xl">
-          {loading ? (
-            <div className="space-y-4">
-              <Skeleton className="h-14 w-80 bg-zinc-800" />
-              <Skeleton className="h-4 w-[500px] bg-zinc-800" />
-              <div className="flex gap-4">
-                <Skeleton className="h-12 w-40 bg-zinc-800" />
-                <Skeleton className="h-12 w-40 bg-zinc-800" />
+        <div className="absolute bottom-[18%] left-6 lg:left-12 z-20 max-w-3xl">
+          {loading || !hero ? (
+            <div className="space-y-5">
+              <Skeleton className="h-6 w-48 bg-zinc-800/50 rounded-full" />
+              <Skeleton className="h-20 w-[80%] bg-zinc-800/50 rounded-2xl" />
+              <Skeleton className="h-4 w-[55%] bg-zinc-800/50 rounded-full" />
+              <div className="flex gap-4 pt-4">
+                <Skeleton className="h-12 w-40 bg-zinc-800/50 rounded-full" />
+                <Skeleton className="h-12 w-40 bg-zinc-800/50 rounded-full" />
               </div>
             </div>
           ) : (
-            <motion.div
-              initial={{ y: 30, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              <div className="flex items-center gap-3 mb-6">
-                <Badge className="bg-primary text-black font-black uppercase tracking-widest px-3 py-1">Em Destaque</Badge>
-                <div className="flex items-center gap-1.5 font-black text-lg">
-                  <Star className="w-5 h-5 text-yellow-500 fill-current" />
-                  {hero.imdb_rating || '8.5'}
-                </div>
-                <span className="text-gray-400 font-bold uppercase tracking-widest text-sm">{hero.year}</span>
-                <Badge variant="outline" className="border-zinc-500 text-zinc-300">4K DUAL ÁUDIO</Badge>
+            <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3, duration: 0.8 }}>
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
+                <Badge className="bg-[#c8ff00] text-black font-black uppercase tracking-[0.2em] text-[10px] px-4 py-1.5 italic">Destaque</Badge>
+                {hero.imdb_rating && (
+                  <div className="flex items-center gap-1.5 font-black text-lg text-yellow-400">
+                    <Star className="w-4 h-4 fill-current" />{Number(hero.imdb_rating).toFixed(1)}
+                  </div>
+                )}
+                <span className="text-zinc-400 font-black text-sm">{hero.year}</span>
+                <Badge variant="outline" className="border-zinc-700 text-zinc-400 font-black text-[9px]">4K HDR</Badge>
+                <Badge variant="outline" className="border-zinc-700 text-zinc-400 font-black text-[9px]">DUAL ÁUDIO</Badge>
               </div>
-
-              <h1 className="text-6xl lg:text-8xl font-black mb-6 tracking-tighter uppercase drop-shadow-2xl">{hero.title}</h1>
-              
-              <p className="text-lg lg:text-xl text-gray-200 mb-10 line-clamp-3 leading-relaxed max-w-2xl font-medium drop-shadow-md">
-                {hero.synopsis || "Explora o melhor do streaming com qualidade máxima. Disponível para streaming imediato em alta definição com dual áudio e legendas premium."}
-              </p>
-
+              <h1 className="text-4xl lg:text-6xl font-black mb-5 tracking-tighter uppercase italic text-white leading-tight drop-shadow-2xl">{hero.title}</h1>
+              <p className="text-base text-zinc-400 mb-8 line-clamp-3 leading-relaxed max-w-lg">{hero.synopsis || "Assista agora em alta definição."}</p>
               <div className="flex flex-wrap gap-4">
-                <Button asChild className="h-14 px-10 rounded-full bg-primary text-black font-black text-lg hover:scale-105 transition-all shadow-2xl shadow-primary/20 group">
-                  <Link to="/watch/$slug" params={{ slug: hero.slug }}>
-                    <Play className="w-6 h-6 mr-2 fill-current" /> Assistir Agora
-                  </Link>
+                <Button asChild className="h-12 px-8 rounded-full bg-[#c8ff00] text-black font-black text-base hover:scale-105 hover:bg-white transition-all border-none italic">
+                  <Link to="/watch/$slug" params={{ slug: hero.slug }}><Play className="w-4 h-4 mr-2 fill-current" /> Assistir Agora</Link>
                 </Button>
-                <Button className="h-14 px-10 rounded-full bg-zinc-800/60 backdrop-blur-md text-white font-black text-lg hover:bg-zinc-700 transition group">
-                  <Plus className="w-6 h-6 mr-2" /> Minha Lista
+                <Button className="h-12 px-8 rounded-full bg-zinc-900/60 backdrop-blur-xl border border-white/10 text-white font-black text-base hover:bg-zinc-800 italic">
+                  <Plus className="w-4 h-4 mr-2" /> Minha Lista
                 </Button>
               </div>
             </motion.div>
           )}
         </div>
 
-        {/* Hero Nav/Dots */}
-        <div className="absolute bottom-10 right-12 z-20 flex gap-2">
-          {displayTitles.slice(0, 5).map((_, i) => (
-            <button 
-              key={i}
-              onClick={() => setHeroIndex(i)}
-              className={`h-1.5 transition-all rounded-full ${heroIndex === i ? 'w-10 bg-primary' : 'w-2 bg-zinc-600'}`}
-            />
-          ))}
-        </div>
+        {!loading && displayTitles.length > 1 && (
+          <div className="absolute bottom-10 right-10 z-20 flex gap-2.5">
+            {displayTitles.slice(0, 6).map((_, i) => (
+              <button key={i} onClick={() => setHeroIndex(i)}
+                className={`h-1.5 transition-all duration-500 rounded-full ${heroIndex === i ? 'w-10 bg-primary' : 'w-2.5 bg-zinc-700 hover:bg-zinc-500'}`} />
+            ))}
+          </div>
+        )}
       </header>
 
-      {/* Main Content Rows */}
-      <main className="relative z-20 -mt-24 pb-20">
-        <MovieRow 
-          title="Lançamentos Recentes" 
-          items={displayTitles.slice(0, 10)} 
-          loading={loading} 
-        />
-        
-        <MovieRow 
-          title="Top IMDb" 
-          items={[...displayTitles].sort((a,b) => (b.imdb_rating || 0) - (a.imdb_rating || 0))} 
-          loading={loading} 
-        />
+      {/* Content Rows */}
+      <main className="relative z-20 -mt-28 pb-32">
+        <TitleRow title="Lançamentos Recentes" items={displayTitles.slice(0, 20)} loading={loading} />
+        <TitleRow title="Top IMDb" items={topRated.slice(0, 20)} loading={loading} />
 
-        <MovieRow 
-          title="Filmes de Ação" 
-          items={displayTitles.filter(t => t.type === 'movie')} 
-          loading={loading} 
-        />
+        <div className="px-6 lg:px-12 my-16">
+          <div className="h-44 w-full rounded-3xl bg-gradient-to-br from-primary/15 via-zinc-900 to-black border border-primary/10 flex items-center justify-between px-10 overflow-hidden relative group cursor-pointer">
+            <div className="z-10 max-w-md">
+              <Badge className="bg-[#c8ff00] text-black font-black mb-3 px-3 italic tracking-widest text-[10px]">INWISE MOVIES</Badge>
+              <h2 className="text-3xl font-black tracking-tighter uppercase mb-2 italic text-white">Experiência 4K Ultra HD</h2>
+              <p className="text-zinc-400 text-sm">Dual Áudio • Legendas PT-BR • Todos os formatos</p>
+            </div>
+            <Button className="hidden md:flex bg-white text-black font-black uppercase px-7 h-11 rounded-full hover:bg-primary transition-all hover:scale-105 z-10 text-xs">
+              Explorar Catálogo
+            </Button>
+            <div className="absolute right-[-10%] top-[-20%] w-[50%] aspect-square bg-primary/20 blur-[120px] rounded-full group-hover:bg-primary/30 transition-all duration-1000" />
+          </div>
+        </div>
 
-        <MovieRow 
-          title="Séries Populares" 
-          items={displayTitles.filter(t => t.type === 'series')} 
-          loading={loading} 
-        />
-
-        <MovieRow 
-          title="Animes e Animações" 
-          items={displayTitles} 
-          loading={loading} 
-        />
+        {movies.length > 0 && <TitleRow title="Filmes em Destaque" items={movies.slice(0, 20)} loading={false} />}
+        {series.length > 0 && <TitleRow title="Séries de Sucesso" items={series.slice(0, 20)} loading={false} />}
+        {animes.length > 0  && <TitleRow title="Animes & Animações"  items={animes.slice(0, 20)}  loading={false} />}
+        {movies.length === 0 && series.length === 0 && !loading && (
+          <TitleRow title="Todo o Catálogo" items={displayTitles.slice(0, 20)} loading={false} />
+        )}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-zinc-950 border-t border-zinc-900 px-6 lg:px-12 py-16">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-12">
-          <div className="col-span-2">
-            <h3 className="text-2xl font-black text-primary mb-6 tracking-tighter">STARCK FILMES</h3>
-            <p className="text-sm text-gray-500 max-w-sm leading-relaxed">O melhor agregador de conteúdo streaming com tecnologia P2P. Assista seus filmes e séries favoritos direto no navegador sem complicação.</p>
+      <footer className="bg-zinc-950 border-t border-zinc-900 px-6 lg:px-12 py-20">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+          <div>
+            <InwiseLogo size="lg" className="mb-5" />
+            <p className="text-zinc-500 text-sm leading-relaxed">O melhor catálogo com qualidade 4K, Dual Áudio e legendas PT-BR.</p>
           </div>
           <div>
-            <h4 className="font-black uppercase tracking-widest text-xs mb-6 text-gray-300">Navegação</h4>
-            <ul className="space-y-4 text-xs font-bold text-gray-500">
-              <li><Link to="/" className="hover:text-primary transition">Filmes</Link></li>
-              <li><Link to="/" className="hover:text-primary transition">Séries</Link></li>
-              <li><Link to="/" className="hover:text-primary transition">Animes</Link></li>
-              <li><Link to="/debug" className="hover:text-primary transition">Status do Sistema</Link></li>
+            <h4 className="font-black uppercase tracking-[0.3em] text-[10px] mb-5 text-zinc-300">Catálogo</h4>
+            <ul className="space-y-3 text-[11px] font-black uppercase tracking-widest text-zinc-500">
+              <li><Link to="/" className="hover:text-primary transition-colors">Filmes</Link></li>
+              <li><Link to="/" className="hover:text-primary transition-colors">Séries</Link></li>
+              <li><Link to="/" className="hover:text-primary transition-colors">Animes</Link></li>
+              <li><Link to="/" className="hover:text-primary transition-colors">Lançamentos 2026</Link></li>
             </ul>
           </div>
           <div>
-            <h4 className="font-black uppercase tracking-widest text-xs mb-6 text-gray-300">Suporte</h4>
-            <ul className="space-y-4 text-xs font-bold text-gray-500">
-              <li><Link to="/" className="hover:text-primary transition">DMCA</Link></li>
-              <li><Link to="/" className="hover:text-primary transition">Contato</Link></li>
-              <li><Link to="/" className="hover:text-primary transition">Privacidade</Link></li>
-              <li><Link to="/" className="hover:text-primary transition">Telegram</Link></li>
+            <h4 className="font-black uppercase tracking-[0.3em] text-[10px] mb-5 text-zinc-300">Suporte</h4>
+            <ul className="space-y-3 text-[11px] font-black uppercase tracking-widest text-zinc-500">
+              <li><Link to="/" className="hover:text-primary">Ajuda & FAQ</Link></li>
+              <li><Link to="/" className="hover:text-primary">DMCA</Link></li>
+              <li><Link to="/" className="hover:text-primary">Privacidade</Link></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="font-black uppercase tracking-[0.3em] text-[10px] mb-5 text-zinc-300">Admin</h4>
+            <ul className="space-y-3 text-[11px] font-black uppercase tracking-widest text-zinc-500">
+              <li><Link to="/admin" className="text-primary hover:text-white">Painel Admin</Link></li>
+              <li><Link to="/debug" className="hover:text-primary">Debug</Link></li>
             </ul>
           </div>
         </div>
-        <div className="pt-10 border-t border-zinc-900 flex flex-col md:flex-row justify-between items-center gap-6 text-[10px] font-bold text-gray-600 uppercase tracking-widest">
-          <p>© 2026 Starck Filmes. Todos os direitos reservados.</p>
-          <p>Powered by WebTorrent & Lovable Cloud</p>
+        <div className="pt-10 border-t border-zinc-900 flex flex-col md:flex-row justify-between items-center gap-6">
+          <p className="text-[9px] font-black text-zinc-700 uppercase tracking-[0.4em]">© 2026 INWISE MOVIES. POWERED BY WEBTORRENT.</p>
+          <div className="flex gap-8 text-[9px] font-black text-zinc-700 uppercase tracking-[0.2em]">
+            <span>Privacidade</span><span>Termos</span><span>Cookies</span>
+          </div>
         </div>
       </footer>
     </div>
