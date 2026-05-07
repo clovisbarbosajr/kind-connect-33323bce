@@ -37,8 +37,7 @@ SUPABASE_KEY = (
     ".eI5Yr9iSLIy5Yik0fsMXvIq2WaaK7RTcAvIXVqtqQgM"
 )
 
-GATEWAY_URL = "https://acesso-starck.com"
-BASE_URL    = "https://www.starckfilmes-v11.com"
+BASE_URL = "https://www.starckfilmes-v11.com"
 
 # Catalog sections to scrape (will paginate each automatically)
 CATALOG_SECTIONS = [
@@ -225,118 +224,37 @@ def try_attr(page, selectors: list, attr: str = "src") -> str:
     return ""
 
 
-# ─── GATEWAY ──────────────────────────────────────────────────────────────────
+# ─── REAL SITE ────────────────────────────────────────────────────────────────
 
-# Known real domain — used as fallback if gateway automation fails
 REAL_SITE = "https://www.starckfilmes-v11.com"
-
-GATEWAY_DOMAINS = {"acesso-starck.com", "starck.site", "starck.link"}
-
-
-def _on_gateway(page) -> bool:
-    """True if current URL is still a gateway/redirect domain."""
-    try:
-        from urllib.parse import urlparse
-        host = urlparse(page.url).netloc.lower().lstrip("www.")
-        return any(gd in host for gd in GATEWAY_DOMAINS)
-    except Exception:
-        return True
-
-
-def _try_click_any(page, selectors_or_texts: list, label: str, wait_ms=4000) -> bool:
-    """Try clicking the first visible element from a list of CSS selectors or text strings."""
-    for s in selectors_or_texts:
-        for loc in [page.locator(s), page.locator(f"text={s}")]:
-            try:
-                if loc.first.is_visible(timeout=1200):
-                    loc.first.click(timeout=2000)
-                    log.info("[gateway] clicked %s via %r", label, s)
-                    page.wait_for_timeout(wait_ms)
-                    return True
-            except Exception:
-                pass
-    return False
 
 
 def navigate_gateway(page) -> str:
-    """
-    Navigate through the gateway redirect sequence.
-    Returns the final BASE_URL (scheme + host) of the real content site.
-    Falls back to REAL_SITE if automation cannot complete the sequence.
-    """
-    log.info("[gateway] Opening %s", GATEWAY_URL)
+    """Go directly to the real site and dismiss all popups. Returns BASE_URL."""
+    log.info("[gateway] Navigating directly to %s", REAL_SITE)
     try:
-        page.goto(GATEWAY_URL, wait_until="domcontentloaded", timeout=30_000)
-    except Exception as e:
-        log.warning("[gateway] initial load error: %s — jumping straight to real site", e)
         page.goto(REAL_SITE, wait_until="domcontentloaded", timeout=30_000)
-        page.wait_for_timeout(3000)
-        close_any_popup(page)
-        return REAL_SITE
+    except Exception as e:
+        log.warning("[gateway] load warning (continuing): %s", e)
 
-    page.wait_for_timeout(4000)
-    log.info("[gateway] page title: %r  url: %s", page.title(), page.url)
+    page.wait_for_timeout(3000)
+    close_any_popup(page)
+    page.wait_for_timeout(1000)
+    close_any_popup(page)
 
-    # ── Step 1: click "IR PARA O NOVO DOMÍNIO" or any redirect CTA ──
-    step1_texts = [
-        "IR PARA O NOVO DOMÍNIO",
-        "Ir para o novo domínio",
-        "NOVO DOMÍNIO",
-        "novo domínio",
-        "Acessar novo site",
-        "ACESSAR",
-        "novo link",
-        "Clique aqui",
-    ]
-    step1_sels = [
-        "a.btn-primary", "a[class*='btn']", ".btn-redirect",
-        "a[href*='starck']", "#redirect-btn",
-    ]
-    _try_click_any(page, step1_texts + step1_sels, "step1-novo-dominio", wait_ms=5000)
-    log.info("[gateway] after step1: url=%s", page.url)
-
-    # If we jumped to the real site already, skip steps 2/3
-    if not _on_gateway(page):
-        log.info("[gateway] reached real site after step1")
-    else:
-        # ── Step 2: "Próximo" ──
-        _try_click_any(page, [
-            "#nt-btn-ok", ".nt-ok", "button:has-text('Próximo')",
-            "Próximo", "Next", "Continuar",
-        ], "step2-proximo", wait_ms=4000)
-        log.info("[gateway] after step2: url=%s", page.url)
-
-        # ── Step 3: "OK" / confirm ──
-        _try_click_any(page, [
-            "#nt-btn-ok", "button:has-text('OK')", "OK", "Confirmar", "Entrar",
-        ], "step3-ok", wait_ms=5000)
-        log.info("[gateway] after step3: url=%s", page.url)
-
-    # ── Dismiss remaining popups ──
-    for _ in range(5):
-        page.wait_for_timeout(1500)
-        close_any_popup(page)
-        if not _on_gateway(page):
-            break
-
-    from urllib.parse import urlparse
-    final_url = page.url
-    parsed = urlparse(final_url)
-    real_base = f"{parsed.scheme}://{parsed.netloc}"
-
-    # ── FALLBACK: if still on gateway, go directly to real site ──
-    if _on_gateway(page):
-        log.warning("[gateway] still on gateway after all steps — navigating directly to %s", REAL_SITE)
-        try:
+    # If somehow redirected to a gateway domain, navigate back
+    try:
+        current = page.url
+        if REAL_SITE.split("//")[1] not in current:
+            log.warning("[gateway] got redirected to %s — going back to real site", current)
             page.goto(REAL_SITE, wait_until="domcontentloaded", timeout=30_000)
             page.wait_for_timeout(3000)
             close_any_popup(page)
-        except Exception as e:
-            log.error("[gateway] fallback navigation failed: %s", e)
-        real_base = REAL_SITE
+    except Exception:
+        pass
 
-    log.info("[gateway] complete. Final domain: %s", real_base)
-    return real_base
+    log.info("[gateway] complete. Final domain: %s", REAL_SITE)
+    return REAL_SITE
 
 
 # ─── CATALOG LISTING ──────────────────────────────────────────────────────────
@@ -825,7 +743,7 @@ def main():
 
     # Create sync log entry
     log_res = db.table("sync_logs").insert({
-        "status": "running", "base_url": GATEWAY_URL, "imported": 0, "updated": 0,
+        "status": "running", "base_url": BASE_URL, "imported": 0, "updated": 0,
         "failed": 0, "ignored": 0,
     }).execute()
     sync_log_id = log_res.data[0]["id"] if log_res.data else None
