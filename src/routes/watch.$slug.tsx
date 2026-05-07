@@ -6,7 +6,7 @@ import { motion } from "framer-motion";
 import { Play, Star, ChevronLeft, Download, Film, Tv, Languages, Info, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { TorrentPlayer } from "@/components/TorrentPlayer";
+import TorrentPlayer from "@/components/TorrentPlayer";
 
 export const Route = createFileRoute("/watch/$slug")({
   component: Watch,
