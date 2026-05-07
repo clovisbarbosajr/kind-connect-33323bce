@@ -108,17 +108,25 @@ function Watch() {
           {/* Content Info */}
           <div className="lg:col-span-2 space-y-8">
             {/* Player Placeholder / Video Info */}
-            <div className="aspect-video bg-zinc-900 rounded-2xl border border-zinc-800 flex items-center justify-center overflow-hidden group shadow-2xl relative">
+            <div className="rounded-2xl border border-zinc-800 overflow-hidden shadow-2xl relative">
               {activeEpisode ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-black/60 backdrop-blur-sm z-20">
-                  <Play className="w-16 h-16 text-primary fill-current mb-4" />
-                  <h3 className="text-xl font-bold mb-2">S{activeEpisode.season_number} E{activeEpisode.episode_number}: {activeEpisode.title}</h3>
-                  <p className="text-sm text-gray-400">Selecione uma opção de torrent abaixo para começar o streaming.</p>
-                </div>
+                <TorrentPlayer 
+                  magnet={activeEpisode.torrent_options?.[0]?.magnet} 
+                  title={`${title.title} - S${activeEpisode.season_number}E${activeEpisode.episode_number}`}
+                  poster={title.backdrop}
+                />
+              ) : title.type === 'movie' && title.torrent_options?.[0] ? (
+                <TorrentPlayer 
+                  magnet={title.torrent_options[0].magnet} 
+                  title={title.title}
+                  poster={title.backdrop}
+                />
               ) : (
-                <Play className="w-20 h-20 text-zinc-800 group-hover:text-primary transition-colors" />
+                <div className="aspect-video bg-zinc-900 flex flex-col items-center justify-center p-6 text-center">
+                  <Play className="w-20 h-20 text-zinc-800 mb-4" />
+                  <p className="text-gray-500 font-bold uppercase tracking-tighter">Selecione uma opção de torrent para começar</p>
+                </div>
               )}
-              <img src={title.backdrop} className="absolute inset-0 w-full h-full object-cover opacity-20" alt="" />
             </div>
 
             <div className="space-y-4">
