@@ -835,10 +835,7 @@ def main():
 
         # ── Phase 1: Gateway ──────────────────────────────────────────
         real_base = navigate_gateway(page)
-
-        # Override BASE_URL globally with the real domain found
-        global BASE_URL
-        BASE_URL = real_base
+        BASE_URL = real_base  # use real domain for all sections below
 
         sections = [
             f"{BASE_URL}/",
