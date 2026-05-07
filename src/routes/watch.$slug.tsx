@@ -152,7 +152,7 @@ function Watch() {
               {/* Quality badge */}
               <div className="flex gap-2 mb-6">
                 {choiceModal.quality && (
-                  <Badge className="bg-[#c8ff00] text-black font-black text-[10px] uppercase">
+                  <Badge className="bg-[#00d4ff] text-black font-black text-[10px] uppercase">
                     {choiceModal.quality}
                   </Badge>
                 )}
@@ -167,7 +167,7 @@ function Watch() {
               <div className="flex flex-col gap-3">
                 <Button
                   onClick={() => openPlayer(choiceModal.magnet, choiceModal.label)}
-                  className="w-full h-14 bg-[#c8ff00] hover:bg-white text-black font-black uppercase tracking-widest text-sm rounded-2xl border-none gap-3 transition-all hover:scale-[1.02]"
+                  className="w-full h-14 bg-[#00d4ff] hover:bg-white text-black font-black uppercase tracking-widest text-sm rounded-2xl border-none gap-3 transition-all hover:scale-[1.02]"
                 >
                   <MonitorPlay className="w-5 h-5" />
                   Assistir Online
@@ -201,7 +201,7 @@ function Watch() {
           >
             <div className="flex justify-between items-center mb-4">
               <div>
-                <h2 className="text-lg font-black uppercase tracking-wide italic text-[#c8ff00]">{title.title}</h2>
+                <h2 className="text-lg font-black uppercase tracking-wide italic text-[#00d4ff]">{title.title}</h2>
                 {selectedTorrentLabel && (
                   <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">{selectedTorrentLabel}</p>
                 )}
@@ -241,7 +241,7 @@ function Watch() {
         {/* Title info */}
         <div className="absolute bottom-8 left-6 lg:left-10 z-20 max-w-2xl">
           <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <Badge className="bg-[#c8ff00] text-black font-black uppercase text-[9px] px-3 py-1 tracking-widest">
+            <Badge className="bg-[#00d4ff] text-black font-black uppercase text-[9px] px-3 py-1 tracking-widest">
               {title.type === 'movie' ? 'Filme' : title.type === 'anime' ? 'Anime' : 'Série'}
             </Badge>
             {title.imdb_rating && (
@@ -258,7 +258,7 @@ function Watch() {
             <Badge variant="outline" className="border-zinc-600 text-zinc-300 text-[9px] font-black">4K ULTRA HD</Badge>
           </div>
 
-          <h1 className="text-4xl lg:text-6xl font-black mb-3 tracking-tighter uppercase italic text-[#c8ff00] leading-none drop-shadow-2xl">
+          <h1 className="text-4xl lg:text-6xl font-black mb-3 tracking-tighter uppercase italic text-[#00d4ff] leading-none drop-shadow-2xl">
             {title.title}
           </h1>
           {title.synopsis && (
@@ -386,7 +386,7 @@ function Watch() {
                         </div>
                       </div>
                       <div className="flex gap-2 w-full">
-                        <Button className="flex-1 bg-[#c8ff00] group-hover:bg-white text-black font-black uppercase tracking-widest py-6 rounded-xl transition-all border-none text-xs gap-2">
+                        <Button className="flex-1 bg-[#00d4ff] group-hover:bg-white text-black font-black uppercase tracking-widest py-6 rounded-xl transition-all border-none text-xs gap-2">
                           <MonitorPlay className="w-4 h-4" /> Assistir
                         </Button>
                         <Button

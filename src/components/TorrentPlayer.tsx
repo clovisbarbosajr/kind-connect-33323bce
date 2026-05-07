@@ -249,20 +249,20 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
             className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm gap-4"
           >
             <div className="relative">
-              <Loader2 className="w-14 h-14 text-[#c8ff00] animate-spin" />
+              <Loader2 className="w-14 h-14 text-[#00d4ff] animate-spin" />
               {poster && (
                 <img src={poster} alt="" className="absolute inset-0 w-full h-full object-cover rounded-full opacity-20" />
               )}
             </div>
             <div className="text-center">
-              <p className="font-black text-lg uppercase tracking-widest text-[#c8ff00]">
+              <p className="font-black text-lg uppercase tracking-widest text-[#00d4ff]">
                 {status === 'loading' ? 'Iniciando' : 'Carregando...'}
               </p>
               <p className="text-zinc-500 text-xs mt-1 max-w-xs text-center">{statusMsg}</p>
             </div>
             {stats.peers > 0 && (
               <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 bg-zinc-900/80 px-4 py-2 rounded-full">
-                <span className="flex items-center gap-1"><Wifi className="w-3 h-3 text-[#c8ff00]" />{stats.peers} peers</span>
+                <span className="flex items-center gap-1"><Wifi className="w-3 h-3 text-[#00d4ff]" />{stats.peers} peers</span>
                 <span>{stats.speed.toFixed(1)} MB/s</span>
                 <span>{stats.progress.toFixed(0)}%</span>
               </div>
@@ -289,7 +289,7 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
       {/* ── Stats badge (top-left, visible while streaming) ── */}
       {status === 'streaming' && (
         <div className="absolute top-3 left-3 z-10 flex items-center gap-3 text-[9px] font-black uppercase tracking-widest text-white/40 bg-black/40 backdrop-blur-sm px-3 py-1 rounded-full">
-          <span className="flex items-center gap-1"><Activity className="w-3 h-3 text-[#c8ff00]" />{stats.speed.toFixed(1)} MB/s</span>
+          <span className="flex items-center gap-1"><Activity className="w-3 h-3 text-[#00d4ff]" />{stats.speed.toFixed(1)} MB/s</span>
           <span>{stats.peers} peers</span>
           <span>{stats.progress.toFixed(0)}%</span>
         </div>
@@ -315,11 +315,11 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
             <div className="relative px-5 pb-1 group/bar">
               <div className="h-1 bg-white/20 rounded-full relative">
                 <div
-                  className="absolute inset-y-0 left-0 bg-[#c8ff00] rounded-full shadow-[0_0_8px_rgba(200,255,0,0.6)] transition-all"
+                  className="absolute inset-y-0 left-0 bg-[#00d4ff] rounded-full shadow-[0_0_8px_rgba(0,212,255,0.6)] transition-all"
                   style={{ width: `${pct}%` }}
                 />
                 <div
-                  className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-[#c8ff00] rounded-full shadow-[0_0_8px_rgba(200,255,0,0.8)] -translate-x-1/2 opacity-0 group-hover/bar:opacity-100 transition-opacity"
+                  className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-[#00d4ff] rounded-full shadow-[0_0_8px_rgba(0,212,255,0.8)] -translate-x-1/2 opacity-0 group-hover/bar:opacity-100 transition-opacity"
                   style={{ left: `${pct}%` }}
                 />
               </div>
@@ -334,7 +334,7 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
             <div className="relative flex items-center justify-between px-5 pb-4 pt-2">
               <div className="flex items-center gap-4">
                 {/* Play/Pause */}
-                <button onClick={togglePlay} className="text-white hover:text-[#c8ff00] transition-colors">
+                <button onClick={togglePlay} className="text-white hover:text-[#00d4ff] transition-colors">
                   {isPlaying
                     ? <Pause className="w-7 h-7 fill-current" />
                     : <Play  className="w-7 h-7 fill-current" />}
@@ -354,7 +354,7 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
                   <input
                     type="range" min="0" max="1" step="0.05" value={isMuted ? 0 : volume}
                     onChange={handleVolume}
-                    className="w-16 accent-[#c8ff00] cursor-pointer"
+                    className="w-16 accent-[#00d4ff] cursor-pointer"
                   />
                 </div>
                 {/* Time */}
@@ -368,7 +368,7 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
                 {subtitleTrack && (
                   <button
                     onClick={() => setSubtitleEnabled(p => !p)}
-                    className={`transition-colors ${subtitleEnabled ? 'text-[#c8ff00]' : 'text-white/40'}`}
+                    className={`transition-colors ${subtitleEnabled ? 'text-[#00d4ff]' : 'text-white/40'}`}
                     title="Legendas"
                   >
                     <SubtitlesIcon className="w-5 h-5" />
@@ -391,7 +391,7 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
             initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.8, opacity: 0 }}
             className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none"
           >
-            <div className="w-16 h-16 bg-[#c8ff00] rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(200,255,0,0.4)]">
+            <div className="w-16 h-16 bg-[#00d4ff] rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(0,212,255,0.4)]">
               <Play className="w-7 h-7 fill-black text-black ml-1" />
             </div>
           </motion.div>

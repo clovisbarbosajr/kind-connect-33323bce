@@ -35,7 +35,7 @@ export function TitleRow({ title, items, loading }: TitleRowProps) {
     <div className="space-y-4 mb-10 relative group/row">
       <div className="flex items-center justify-between px-6 lg:px-12">
         <h2 className="text-lg md:text-xl font-black tracking-tighter uppercase italic text-white flex items-center gap-2.5">
-          <span className="w-1 h-5 bg-[#c8ff00] rounded-full" />
+          <span className="w-1 h-5 bg-[#00d4ff] rounded-full" />
           {title}
         </h2>
         <Link to="/" className="text-[10px] font-black text-zinc-500 hover:text-primary transition uppercase tracking-[0.2em] border-b border-transparent hover:border-primary">
@@ -97,14 +97,14 @@ export function TitleRow({ title, items, loading }: TitleRowProps) {
 
                   {/* Play overlay */}
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="w-10 h-10 bg-[#c8ff00] rounded-full flex items-center justify-center text-black shadow-[0_0_15px_rgba(200,255,0,0.5)]">
+                    <div className="w-10 h-10 bg-[#00d4ff] rounded-full flex items-center justify-center text-black shadow-[0_0_15px_rgba(0,212,255,0.5)]">
                       <Play className="w-5 h-5 fill-current ml-0.5" />
                     </div>
                   </div>
                 </motion.div>
 
                 <div className="mt-2.5 px-1">
-                  <h3 className="font-bold text-[11px] md:text-[13px] truncate group-hover:text-primary transition-colors uppercase tracking-tight">{item.title}</h3>
+                  <h3 className="font-bold text-[11px] md:text-[12px] truncate group-hover:text-primary transition-colors uppercase tracking-tight">{item.title}</h3>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[9px] text-zinc-500 font-black uppercase">{item.year || '—'}</span>
                     <span className="text-[9px] text-zinc-700">•</span>

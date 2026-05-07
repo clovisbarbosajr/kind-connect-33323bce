@@ -118,7 +118,7 @@ function AdminDashboard() {
               className="w-full bg-black border border-zinc-800 rounded-2xl px-5 py-4 outline-none focus:border-primary text-center font-black tracking-widest text-sm"
               autoFocus
             />
-            <button type="submit" className="w-full bg-[#c8ff00] text-black py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] transition-transform text-sm">
+            <button type="submit" className="w-full bg-[#00d4ff] text-black py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] transition-transform text-sm">
               Desbloquear Painel
             </button>
           </form>
@@ -216,7 +216,7 @@ function AdminDashboard() {
                 <div>
                   <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest mb-1">Status do Crawler</p>
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(200,255,0,0.5)]" />
+                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_rgba(0,212,255,0.5)]" />
                     <span className="text-[10px] font-black uppercase text-primary">Pronto para Captura</span>
                   </div>
                 </div>
@@ -333,7 +333,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function StatusDot({ status }: { status: string }) {
   const cls = status === 'success' || status === 'online'
-    ? 'bg-primary shadow-[0_0_5px_rgba(200,255,0,0.5)]'
+    ? 'bg-primary shadow-[0_0_5px_rgba(0,212,255,0.5)]'
     : status === 'error' || status === 'offline'
       ? 'bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]'
       : 'bg-blue-400 shadow-[0_0_5px_rgba(96,165,250,0.5)]';

@@ -55,8 +55,8 @@
   --popover: oklch(0.12 0.01 260);
   --popover-foreground: var(--foreground);
   
-  --primary: oklch(0.85 0.2 145); /* Verde Neon */
-  --primary-foreground: oklch(0.1 0.05 145);
+  --primary: oklch(0.82 0.18 210); /* Cyan */
+  --primary-foreground: oklch(0.1 0.05 210);
   
   --secondary: oklch(0.2 0.02 260);
   --secondary-foreground: var(--foreground);
@@ -74,8 +74,8 @@
   --input: oklch(0.2 0.02 260);
   --ring: var(--primary);
   
-  --neon-green: oklch(0.85 0.2 145);
-  --neon-glow: oklch(0.85 0.2 145 / 0.3);
+  --neon-green: oklch(0.82 0.18 210);
+  --neon-glow: oklch(0.82 0.18 210 / 0.3);
 }
 
 @layer base {

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Search, Menu, User, Star, Plus, ChevronDown, Bell, Globe } from "lucide-react";
+import { Play, Search, Star, Plus, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TitleRow } from "@/components/TitleRow";
@@ -13,7 +13,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 
 export const Route = createFileRoute("/")({
@@ -125,7 +124,7 @@ function Index() {
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 px-6 lg:px-12 py-4 flex items-center justify-between ${scrolled ? 'bg-black shadow-2xl' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
         <div className="flex items-center gap-10">
           <Link to="/"><InwiseLogo size="md" /></Link>
-          <div className="hidden lg:flex items-center gap-6 text-[11px] font-black uppercase tracking-widest text-zinc-300">
+          <div className="hidden lg:flex items-center gap-6 text-xs font-black uppercase tracking-widest text-zinc-300">
             <Link to="/" className="text-white hover:text-primary transition-colors">INÍCIO</Link>
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-1 hover:text-white outline-none uppercase">
@@ -151,7 +150,7 @@ function Index() {
             <Link to="/" className="hover:text-white transition-colors">SÉRIES</Link>
             <Link to="/" className="hover:text-white transition-colors">ANIMES</Link>
             <Link to="/" className="hover:text-white transition-colors">TOP IMDB</Link>
-            <Link to="/" className="text-[#c8ff00] drop-shadow-[0_0_10px_rgba(200,255,0,0.3)]">LANÇAMENTOS 2026</Link>
+            <Link to="/" className="text-[#00d4ff] drop-shadow-[0_0_10px_rgba(0,212,255,0.3)]">LANÇAMENTOS 2026</Link>
           </div>
         </div>
         <div className="flex items-center gap-5">
@@ -160,25 +159,6 @@ function Index() {
               className="bg-zinc-900/60 border border-zinc-800/60 rounded-full pl-10 pr-4 py-2 text-[10px] font-bold uppercase tracking-widest w-48 focus:w-72 transition-all focus:border-primary/50 outline-none text-white placeholder:text-zinc-600" />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-primary transition-colors" />
           </div>
-          <Bell className="w-5 h-5 text-zinc-400 hover:text-white cursor-pointer transition-colors" />
-          <DropdownMenu>
-            <DropdownMenuTrigger className="outline-none">
-              <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/20 hover:border-primary/50 transition-all cursor-pointer">
-                <User className="w-5 h-5 text-primary" />
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-zinc-950 border-zinc-800 w-44 p-2">
-              <DropdownMenuItem className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Favoritos</DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-zinc-800" />
-              <DropdownMenuItem asChild>
-                <Link to="/admin" className="text-[10px] font-bold uppercase tracking-wider text-primary cursor-pointer w-full">Painel Admin</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link to="/debug" className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 cursor-pointer w-full">Debug</Link>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Menu className="lg:hidden w-6 h-6 cursor-pointer" />
         </div>
       </nav>
 
@@ -190,10 +170,10 @@ function Index() {
             <div className="absolute inset-0 bg-gradient-to-r from-black via-black/50 to-transparent z-10" />
             {loading || !hero ? (
               <div className="w-full h-full bg-zinc-950">
-                <div className="w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(200,255,0,0.05),transparent_50%)]" />
+                <div className="w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(0,212,255,0.05),transparent_50%)]" />
               </div>
             ) : (
-              <img src={hero.backdrop || hero.poster} className="w-full h-full object-cover scale-105" alt={hero.title} />
+              <img src={hero.backdrop || hero.poster} className="w-full h-full object-cover object-center" alt={hero.title} />
             )}
           </motion.div>
         </AnimatePresence>
@@ -212,7 +192,7 @@ function Index() {
           ) : (
             <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3, duration: 0.8 }}>
               <div className="flex items-center gap-3 mb-4 flex-wrap">
-                <Badge className="bg-[#c8ff00] text-black font-black uppercase tracking-[0.2em] text-[10px] px-4 py-1.5 italic">Destaque</Badge>
+                <Badge className="bg-[#00d4ff] text-black font-black uppercase tracking-[0.2em] text-[10px] px-4 py-1.5">Destaque</Badge>
                 {hero.imdb_rating && (
                   <div className="flex items-center gap-1.5 font-black text-lg text-yellow-400">
                     <Star className="w-4 h-4 fill-current" />{Number(hero.imdb_rating).toFixed(1)}
@@ -222,10 +202,10 @@ function Index() {
                 <Badge variant="outline" className="border-zinc-700 text-zinc-400 font-black text-[9px]">4K HDR</Badge>
                 <Badge variant="outline" className="border-zinc-700 text-zinc-400 font-black text-[9px]">DUAL ÁUDIO</Badge>
               </div>
-              <h1 className="text-4xl lg:text-6xl font-black mb-5 tracking-tighter uppercase italic text-white leading-tight drop-shadow-2xl">{hero.title}</h1>
+              <h1 className="text-3xl lg:text-5xl font-black mb-5 tracking-tighter uppercase text-white leading-tight drop-shadow-2xl">{hero.title}</h1>
               <p className="text-base text-zinc-400 mb-8 line-clamp-3 leading-relaxed max-w-lg">{hero.synopsis || "Assista agora em alta definição."}</p>
               <div className="flex flex-wrap gap-4">
-                <Button asChild className="h-12 px-8 rounded-full bg-[#c8ff00] text-black font-black text-base hover:scale-105 hover:bg-white transition-all border-none italic">
+                <Button asChild className="h-12 px-8 rounded-full bg-[#00d4ff] text-black font-black text-base hover:scale-105 hover:bg-white transition-all border-none">
                   <Link to="/watch/$slug" params={{ slug: hero.slug }}><Play className="w-4 h-4 mr-2 fill-current" /> Assistir Agora</Link>
                 </Button>
                 <Button className="h-12 px-8 rounded-full bg-zinc-900/60 backdrop-blur-xl border border-white/10 text-white font-black text-base hover:bg-zinc-800 italic">
@@ -244,6 +224,24 @@ function Index() {
             ))}
           </div>
         )}
+
+        {/* Hero carousel arrows */}
+        {!loading && displayTitles.length > 1 && (
+          <>
+            <button
+              onClick={() => setHeroIndex(prev => (prev - 1 + Math.min(displayTitles.length, 6)) % Math.min(displayTitles.length, 6))}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white hover:bg-black/80 hover:border-primary/50 transition-all"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <button
+              onClick={() => setHeroIndex(prev => (prev + 1) % Math.min(displayTitles.length, 6))}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white hover:bg-black/80 hover:border-primary/50 transition-all"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          </>
+        )}
       </header>
 
       {/* Content Rows */}
@@ -251,21 +249,7 @@ function Index() {
         <TitleRow title="Lançamentos Recentes" items={displayTitles.slice(0, 20)} loading={loading} />
         <TitleRow title="Top IMDb" items={topRated.slice(0, 20)} loading={loading} />
 
-        <div className="px-6 lg:px-12 my-16">
-          <div className="h-44 w-full rounded-3xl bg-gradient-to-br from-primary/15 via-zinc-900 to-black border border-primary/10 flex items-center justify-between px-10 overflow-hidden relative group cursor-pointer">
-            <div className="z-10 max-w-md">
-              <Badge className="bg-[#c8ff00] text-black font-black mb-3 px-3 italic tracking-widest text-[10px]">INWISE MOVIES</Badge>
-              <h2 className="text-3xl font-black tracking-tighter uppercase mb-2 italic text-white">Experiência 4K Ultra HD</h2>
-              <p className="text-zinc-400 text-sm">Dual Áudio • Legendas PT-BR • Todos os formatos</p>
-            </div>
-            <Button className="hidden md:flex bg-white text-black font-black uppercase px-7 h-11 rounded-full hover:bg-primary transition-all hover:scale-105 z-10 text-xs">
-              Explorar Catálogo
-            </Button>
-            <div className="absolute right-[-10%] top-[-20%] w-[50%] aspect-square bg-primary/20 blur-[120px] rounded-full group-hover:bg-primary/30 transition-all duration-1000" />
-          </div>
-        </div>
-
-        {movies.length > 0 && <TitleRow title="Filmes em Destaque" items={movies.slice(0, 20)} loading={false} />}
+{movies.length > 0 && <TitleRow title="Filmes em Destaque" items={movies.slice(0, 20)} loading={false} />}
         {series.length > 0 && <TitleRow title="Séries de Sucesso" items={series.slice(0, 20)} loading={false} />}
         {animes.length > 0  && <TitleRow title="Animes & Animações"  items={animes.slice(0, 20)}  loading={false} />}
         {movies.length === 0 && series.length === 0 && !loading && (
