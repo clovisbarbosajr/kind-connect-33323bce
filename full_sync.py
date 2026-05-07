@@ -508,13 +508,21 @@ def scrape_title(page, url: str) -> dict | None:
         title_text = re.sub(r'\s{2,}', ' ', title_text).strip()
 
         # ── Type: movie / series / anime ──
-        title_type = "movie"
         body_lower = html.lower()
-        if "temporada" in body_lower or "episódio" in body_lower or "episodio" in body_lower:
+        # Use URL path as primary signal (most reliable)
+        if "/series/" in url or "/serie/" in url:
             title_type = "series"
+        elif "/animes/" in url or "/anime/" in url:
+            title_type = "anime"
+        elif "/filmes/" in url or "/filme/" in url or "/movies/" in url:
+            title_type = "movie"
+        else:
+            # Fall back to content detection — count occurrences to avoid false positives from menus
+            season_hits = len(re.findall(r'\btemporada\b|\bs\d{2}e\d{2}\b', body_lower))
+            title_type = "series" if season_hits >= 2 else "movie"
         try:
             type_el = try_text(page, ["[class*='type']", "[class*='genre']", ".cat", ".tag"])
-            if "anime" in (type_el or "").lower() or "anime" in body_lower[:500]:
+            if "anime" in (type_el or "").lower():
                 title_type = "anime"
         except Exception:
             pass
