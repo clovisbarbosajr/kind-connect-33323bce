@@ -2,7 +2,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Star, Calendar, ChevronLeft, Download, Info, Tv, X, ChevronDown } from "lucide-react";
+import {
+  Play, Star, Calendar, ChevronLeft, Download, Info,
+  Tv, X, ChevronDown, Magnet, MonitorPlay
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,14 +16,22 @@ export const Route = createFileRoute("/watch/$slug")({
   component: Watch,
 });
 
+interface TorrentChoice {
+  magnet: string;
+  label: string;
+  quality: string;
+  audio: string;
+}
+
 function Watch() {
   const { slug } = Route.useParams();
-  const [title, setTitle] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<any>(null);
-  const [selectedTorrent, setSelectedTorrent] = useState<string | null>(null);
+  const [title, setTitle]       = useState<any>(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<any>(null);
+  const [selectedTorrent, setSelectedTorrent]     = useState<string | null>(null);
   const [selectedTorrentLabel, setSelectedTorrentLabel] = useState("");
   const [openSeasons, setOpenSeasons] = useState<Set<number>>(new Set([1]));
+  const [choiceModal, setChoiceModal] = useState<TorrentChoice | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -62,9 +73,20 @@ function Watch() {
     });
   };
 
+  // Show choice dialog before playing
+  const handleTorrentClick = (magnet: string, label: string, quality = "", audio = "") => {
+    setChoiceModal({ magnet, label, quality, audio });
+  };
+
   const openPlayer = (magnet: string, label: string) => {
+    setChoiceModal(null);
     setSelectedTorrent(magnet);
     setSelectedTorrentLabel(label);
+  };
+
+  const downloadTorrent = (magnet: string) => {
+    setChoiceModal(null);
+    window.location.href = magnet;
   };
 
   if (loading) {
@@ -98,7 +120,77 @@ function Watch() {
   return (
     <div className="min-h-screen bg-black text-white selection:bg-primary selection:text-black">
 
-      {/* Player Modal */}
+      {/* ── Choice Modal (Assistir / Baixar) ── */}
+      <AnimatePresence>
+        {choiceModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4"
+            onClick={() => setChoiceModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.92, opacity: 0, y: 20 }}
+              transition={{ type: "spring", stiffness: 300, damping: 28 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-sm w-full shadow-2xl"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between mb-6">
+                <div>
+                  <h3 className="font-black text-lg uppercase tracking-tight text-white italic">{title.title}</h3>
+                  <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{choiceModal.label}</p>
+                </div>
+                <button onClick={() => setChoiceModal(null)} className="text-zinc-600 hover:text-white transition-colors ml-4 mt-0.5">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Quality badge */}
+              <div className="flex gap-2 mb-6">
+                {choiceModal.quality && (
+                  <Badge className="bg-[#c8ff00] text-black font-black text-[10px] uppercase">
+                    {choiceModal.quality}
+                  </Badge>
+                )}
+                {choiceModal.audio && (
+                  <Badge className="bg-zinc-800 text-zinc-300 font-black text-[10px] uppercase border-none">
+                    {choiceModal.audio}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Buttons */}
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={() => openPlayer(choiceModal.magnet, choiceModal.label)}
+                  className="w-full h-14 bg-[#c8ff00] hover:bg-white text-black font-black uppercase tracking-widest text-sm rounded-2xl border-none gap-3 transition-all hover:scale-[1.02]"
+                >
+                  <MonitorPlay className="w-5 h-5" />
+                  Assistir Online
+                </Button>
+                <Button
+                  onClick={() => downloadTorrent(choiceModal.magnet)}
+                  variant="outline"
+                  className="w-full h-14 bg-transparent border border-zinc-700 hover:border-zinc-500 text-white font-black uppercase tracking-widest text-sm rounded-2xl gap-3 transition-all hover:bg-zinc-900"
+                >
+                  <Download className="w-5 h-5" />
+                  Baixar Torrent
+                </Button>
+              </div>
+
+              <p className="text-zinc-700 text-[9px] font-black uppercase tracking-widest text-center mt-4">
+                "Assistir" usa WebTorrent no navegador • "Baixar" abre no cliente torrent
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Player Modal ── */}
       <AnimatePresence>
         {selectedTorrent && (
           <motion.div
@@ -237,10 +329,15 @@ function Watch() {
                                   <Button
                                     key={opt.id}
                                     size="sm"
-                                    onClick={() => openPlayer(opt.magnet, `T${season.season_number}EP${ep.episode_number} • ${opt.quality || ''} ${opt.audio_type || ''}`)}
-                                    className="h-8 px-4 bg-zinc-800 hover:bg-primary hover:text-black text-white border-none font-black text-[10px] uppercase transition-all rounded-lg"
+                                    onClick={() => handleTorrentClick(
+                                      opt.magnet,
+                                      `T${season.season_number}E${String(ep.episode_number).padStart(2,'0')} • ${opt.quality || ''} ${opt.audio_type || ''}`.trim(),
+                                      opt.quality,
+                                      opt.audio_type
+                                    )}
+                                    className="h-8 px-4 bg-zinc-800 hover:bg-primary hover:text-black text-white border-none font-black text-[10px] uppercase transition-all rounded-lg gap-1.5"
                                   >
-                                    <Play className="w-3 h-3 mr-1.5 fill-current" />
+                                    <Play className="w-3 h-3 fill-current" />
                                     {opt.quality || '1080p'}
                                     {opt.audio_type && ` • ${opt.audio_type}`}
                                   </Button>
@@ -271,7 +368,7 @@ function Watch() {
                   {title.torrent_options.map((opt: any) => (
                     <div
                       key={opt.id}
-                      onClick={() => openPlayer(opt.magnet, `${opt.quality || ''} ${opt.audio_type || ''}`)}
+                      onClick={() => handleTorrentClick(opt.magnet, `${opt.quality || ''} ${opt.audio_type || ''}`.trim(), opt.quality, opt.audio_type)}
                       className="bg-zinc-900/60 border border-zinc-800/50 p-5 rounded-2xl flex flex-col gap-3 hover:border-primary/50 transition cursor-pointer group"
                     >
                       <div className="flex justify-between items-start">
@@ -288,9 +385,18 @@ function Watch() {
                           <Play className="w-5 h-5 fill-current" />
                         </div>
                       </div>
-                      <Button className="w-full bg-zinc-800 group-hover:bg-primary text-white group-hover:text-black font-black uppercase tracking-widest py-6 rounded-xl transition-all border-none text-xs">
-                        Assistir Agora
-                      </Button>
+                      <div className="flex gap-2 w-full">
+                        <Button className="flex-1 bg-[#c8ff00] group-hover:bg-white text-black font-black uppercase tracking-widest py-6 rounded-xl transition-all border-none text-xs gap-2">
+                          <MonitorPlay className="w-4 h-4" /> Assistir
+                        </Button>
+                        <Button
+                          onClick={e => { e.stopPropagation(); downloadTorrent(opt.magnet); }}
+                          variant="outline"
+                          className="h-full px-4 bg-transparent border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white rounded-xl"
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
