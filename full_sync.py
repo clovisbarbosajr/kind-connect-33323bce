@@ -31,7 +31,7 @@ SUPABASE_KEY = (
 )
 
 GATEWAY_URL = "https://acesso-starck.com"
-BASE_URL    = "https://starckfilmes-v11.com"
+BASE_URL    = "https://www.starckfilmes-v11.com"
 
 # Catalog sections to scrape (will paginate each automatically)
 CATALOG_SECTIONS = [
@@ -56,6 +56,13 @@ def slugify(text: str) -> str:
 
 def close_any_popup(page):
     """Try to close Telegram/ad popups. Call after every navigation."""
+    # First try pressing Escape to dismiss any overlay
+    try:
+        page.keyboard.press("Escape")
+        time.sleep(0.3)
+    except Exception:
+        pass
+
     candidates = [
         ".fa-times",
         ".fa-close",
@@ -68,10 +75,18 @@ def close_any_popup(page):
         "button:has-text('×')",
         "button:has-text('✕')",
         "button:has-text('Fechar')",
+        "button:has-text('Não')",
+        "button:has-text('Ignorar')",
         "a:has-text('×')",
+        "a:has-text('Fechar')",
         ".notification-close",
         "#popup-close",
         ".popup .close",
+        # "Comunicado Importante" overlay - click outside or find any dismiss element
+        "[class*='comunicado'] button",
+        "[class*='notice'] button",
+        "[class*='overlay'] button",
+        "[class*='modal'] .btn-secondary",
     ]
     for sel in candidates:
         try:
@@ -84,14 +99,32 @@ def close_any_popup(page):
         except Exception:
             pass
 
+    # If "Comunicado Importante" popup visible, click outside it to dismiss
+    try:
+        if page.locator("text=Comunicado Importante").is_visible(timeout=400):
+            page.mouse.click(10, 10)
+            time.sleep(0.5)
+            log.debug("[popup] dismissed Comunicado via outside click")
+    except Exception:
+        pass
+
 
 def safe_goto(page, url: str, retries: int = 3) -> bool:
     """Navigate to URL with retries and popup cleanup."""
     for attempt in range(retries):
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-            page.wait_for_timeout(1800)
+            page.wait_for_timeout(2500)
             close_any_popup(page)
+            page.wait_for_timeout(800)
+            # Check if still on gateway/popup — try close again
+            try:
+                if page.locator("text=Comunicado Importante").is_visible(timeout=500):
+                    page.keyboard.press("Escape")
+                    page.mouse.click(10, 10)
+                    page.wait_for_timeout(800)
+            except Exception:
+                pass
             return True
         except Exception as exc:
             log.warning(f"[nav] attempt {attempt + 1}/{retries} failed for {url}: {exc}")
@@ -190,10 +223,16 @@ def navigate_gateway(page):
 def get_card_urls(page) -> set:
     """Extract all title detail URLs from the current listing page."""
     urls: set = set()
+
+    # First try specific content-path selectors
+    path_patterns = ["/filme/", "/serie/", "/anime/", "/filmes/", "/series/", "/animes/"]
     selectors = [
         "a[href*='/filme/']",
         "a[href*='/serie/']",
         "a[href*='/anime/']",
+        "a[href*='/filmes/']",
+        "a[href*='/series/']",
+        "a[href*='/animes/']",
         ".item a[href]",
         ".ml-item a[href]",
         "article a[href]",
@@ -201,6 +240,11 @@ def get_card_urls(page) -> set:
         ".movies-list a[href]",
         ".item-movie a[href]",
         ".content-item a[href]",
+        ".card a[href]",
+        "h2 a[href]",
+        "h3 a[href]",
+        ".entry-title a[href]",
+        ".post-title a[href]",
     ]
     for sel in selectors:
         try:
@@ -208,10 +252,32 @@ def get_card_urls(page) -> set:
                 href = el.get_attribute("href") or ""
                 if href.startswith("/"):
                     href = BASE_URL + href
-                if any(p in href for p in ["/filme/", "/serie/", "/anime/"]):
+                if not href.startswith("http"):
+                    continue
+                # Accept links that contain known content path patterns OR
+                # look like a single-word slug under the same domain
+                if any(p in href for p in path_patterns):
                     urls.add(href.split("?")[0].rstrip("/") + "/")
         except Exception:
             pass
+
+    # Fallback: grab ALL internal links that look like single-title slugs
+    if not urls:
+        try:
+            for el in page.locator("a[href]").all():
+                href = el.get_attribute("href") or ""
+                if href.startswith("/"):
+                    href = BASE_URL + href
+                if BASE_URL not in href:
+                    continue
+                path = href.replace(BASE_URL, "").lstrip("/")
+                # Single level path like "nome-do-filme/" or "nome-do-filme"
+                parts = [p for p in path.split("/") if p]
+                if len(parts) == 1 and len(parts[0]) > 4 and "?" not in parts[0]:
+                    urls.add(href.split("?")[0].rstrip("/") + "/")
+        except Exception:
+            pass
+
     return urls
 
 
