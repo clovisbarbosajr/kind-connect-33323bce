@@ -811,7 +811,7 @@ def main():
 
     # Create sync log entry
     log_res = db.table("sync_logs").insert({
-        "status": "running", "base_url": BASE_URL, "imported": 0, "updated": 0,
+        "status": "running", "base_url": GATEWAY_URL, "imported": 0, "updated": 0,
         "failed": 0, "ignored": 0,
     }).execute()
     sync_log_id = log_res.data[0]["id"] if log_res.data else None
