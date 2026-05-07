@@ -765,24 +765,23 @@ def main():
         )
         page = ctx.new_page()
 
-        # ── Phase 1: Gateway ──────────────────────────────────────────
+        # ── Phase 1: Navigate to real site ───────────────────────────
         real_base = navigate_gateway(page)
-        BASE_URL = real_base  # use real domain for all sections below
 
         sections = [
-            f"{BASE_URL}/filmes/",
-            f"{BASE_URL}/series/",
-            f"{BASE_URL}/animes/",
-            f"{BASE_URL}/?year=2026",
-            f"{BASE_URL}/?year=2025",
-            f"{BASE_URL}/?year=2024",
-            f"{BASE_URL}/?year=2023",
-            f"{BASE_URL}/?year=2022",
-            f"{BASE_URL}/?year=2021",
-            f"{BASE_URL}/?year=2020",
+            f"{real_base}/filmes/",
+            f"{real_base}/series/",
+            f"{real_base}/animes/",
+            f"{real_base}/?year=2026",
+            f"{real_base}/?year=2025",
+            f"{real_base}/?year=2024",
+            f"{real_base}/?year=2023",
+            f"{real_base}/?year=2022",
+            f"{real_base}/?year=2021",
+            f"{real_base}/?year=2020",
             f"{BASE_URL}/",
         ]
-        log.info("[gateway] Using BASE_URL = %s", BASE_URL)
+        log.info("[gateway] Using BASE_URL = %s", real_base)
 
         # ── Phase 2: Collect all title URLs ──────────────────────────
         log.info("\n[phase 2] Collecting title URLs from all sections...")
@@ -790,7 +789,7 @@ def main():
         seen_urls: set = set()
 
         for section in sections:
-            urls = scrape_section(page, section, BASE_URL)
+            urls = scrape_section(page, section, real_base)
             new  = [u for u in urls if u not in seen_urls]
             seen_urls.update(new)
             all_urls.extend(new)
