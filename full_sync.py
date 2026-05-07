@@ -227,72 +227,114 @@ def try_attr(page, selectors: list, attr: str = "src") -> str:
 
 # ─── GATEWAY ──────────────────────────────────────────────────────────────────
 
-def click_novo_dominio(page) -> bool:
-    """Click 'IR PARA O NOVO DOMÍNIO' if present. Returns True if clicked."""
-    for text in ["IR PARA O NOVO DOMÍNIO", "Ir para o novo domínio", "NOVO DOMÍNIO", "novo domínio", "novo link"]:
-        try:
-            btn = page.locator(f"text={text}").first
-            if btn.is_visible(timeout=1500):
-                btn.click()
-                log.info("[gateway] clicked novo dominio: %r", text)
-                page.wait_for_timeout(5000)
-                return True
-        except Exception:
-            pass
+# Known real domain — used as fallback if gateway automation fails
+REAL_SITE = "https://www.starckfilmes-v11.com"
+
+GATEWAY_DOMAINS = {"acesso-starck.com", "starck.site", "starck.link"}
+
+
+def _on_gateway(page) -> bool:
+    """True if current URL is still a gateway/redirect domain."""
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(page.url).netloc.lower().lstrip("www.")
+        return any(gd in host for gd in GATEWAY_DOMAINS)
+    except Exception:
+        return True
+
+
+def _try_click_any(page, selectors_or_texts: list, label: str, wait_ms=4000) -> bool:
+    """Try clicking the first visible element from a list of CSS selectors or text strings."""
+    for s in selectors_or_texts:
+        for loc in [page.locator(s), page.locator(f"text={s}")]:
+            try:
+                if loc.first.is_visible(timeout=1200):
+                    loc.first.click(timeout=2000)
+                    log.info("[gateway] clicked %s via %r", label, s)
+                    page.wait_for_timeout(wait_ms)
+                    return True
+            except Exception:
+                pass
     return False
 
 
 def navigate_gateway(page) -> str:
     """
-    Navigate through gateway and all 'site moved' redirects.
-    Returns the final BASE_URL (scheme + host) of the real site.
+    Navigate through the gateway redirect sequence.
+    Returns the final BASE_URL (scheme + host) of the real content site.
+    Falls back to REAL_SITE if automation cannot complete the sequence.
     """
     log.info("[gateway] Opening %s", GATEWAY_URL)
-    page.goto(GATEWAY_URL, wait_until="domcontentloaded", timeout=30_000)
-    page.wait_for_timeout(5000)
-
-    # Step 1 – initial gateway "IR PARA O NOVO DOMÍNIO"
-    click_novo_dominio(page)
-
-    # Step 2 – #nt-btn-ok / "Próximo"
-    for sel in ["#nt-btn-ok", "button:has-text('Próximo')", "button:has-text('Next')", ".nt-ok"]:
-        try:
-            btn = page.locator(sel).first
-            if btn.is_visible(timeout=2000):
-                btn.click()
-                log.info("[gateway] step2 via %r", sel)
-                page.wait_for_timeout(4000)
-                break
-        except Exception:
-            pass
-
-    # Step 3 – second #nt-btn-ok / "OK"
-    for sel in ["#nt-btn-ok", "button:has-text('OK')", "button:has-text('Confirmar')"]:
-        try:
-            btn = page.locator(sel).first
-            if btn.is_visible(timeout=2000):
-                btn.click()
-                log.info("[gateway] step3 via %r", sel)
-                page.wait_for_timeout(5000)
-                break
-        except Exception:
-            pass
-
-    # Dismiss any remaining popups WITHOUT following redirects
-    for _ in range(4):
-        page.wait_for_timeout(2000)
+    try:
+        page.goto(GATEWAY_URL, wait_until="domcontentloaded", timeout=30_000)
+    except Exception as e:
+        log.warning("[gateway] initial load error: %s — jumping straight to real site", e)
+        page.goto(REAL_SITE, wait_until="domcontentloaded", timeout=30_000)
+        page.wait_for_timeout(3000)
         close_any_popup(page)
-        try:
-            url = page.url
-            if "acesso-starck" not in url:
-                break
-        except Exception:
-            pass
+        return REAL_SITE
+
+    page.wait_for_timeout(4000)
+    log.info("[gateway] page title: %r  url: %s", page.title(), page.url)
+
+    # ── Step 1: click "IR PARA O NOVO DOMÍNIO" or any redirect CTA ──
+    step1_texts = [
+        "IR PARA O NOVO DOMÍNIO",
+        "Ir para o novo domínio",
+        "NOVO DOMÍNIO",
+        "novo domínio",
+        "Acessar novo site",
+        "ACESSAR",
+        "novo link",
+        "Clique aqui",
+    ]
+    step1_sels = [
+        "a.btn-primary", "a[class*='btn']", ".btn-redirect",
+        "a[href*='starck']", "#redirect-btn",
+    ]
+    _try_click_any(page, step1_texts + step1_sels, "step1-novo-dominio", wait_ms=5000)
+    log.info("[gateway] after step1: url=%s", page.url)
+
+    # If we jumped to the real site already, skip steps 2/3
+    if not _on_gateway(page):
+        log.info("[gateway] reached real site after step1")
+    else:
+        # ── Step 2: "Próximo" ──
+        _try_click_any(page, [
+            "#nt-btn-ok", ".nt-ok", "button:has-text('Próximo')",
+            "Próximo", "Next", "Continuar",
+        ], "step2-proximo", wait_ms=4000)
+        log.info("[gateway] after step2: url=%s", page.url)
+
+        # ── Step 3: "OK" / confirm ──
+        _try_click_any(page, [
+            "#nt-btn-ok", "button:has-text('OK')", "OK", "Confirmar", "Entrar",
+        ], "step3-ok", wait_ms=5000)
+        log.info("[gateway] after step3: url=%s", page.url)
+
+    # ── Dismiss remaining popups ──
+    for _ in range(5):
+        page.wait_for_timeout(1500)
+        close_any_popup(page)
+        if not _on_gateway(page):
+            break
 
     from urllib.parse import urlparse
     final_url = page.url
     parsed = urlparse(final_url)
     real_base = f"{parsed.scheme}://{parsed.netloc}"
+
+    # ── FALLBACK: if still on gateway, go directly to real site ──
+    if _on_gateway(page):
+        log.warning("[gateway] still on gateway after all steps — navigating directly to %s", REAL_SITE)
+        try:
+            page.goto(REAL_SITE, wait_until="domcontentloaded", timeout=30_000)
+            page.wait_for_timeout(3000)
+            close_any_popup(page)
+        except Exception as e:
+            log.error("[gateway] fallback navigation failed: %s", e)
+        real_base = REAL_SITE
+
     log.info("[gateway] complete. Final domain: %s", real_base)
     return real_base
 
@@ -400,37 +442,58 @@ def scrape_section(page, section_url: str, base: str) -> list:
 
 # ─── TITLE PAGE SCRAPING ──────────────────────────────────────────────────────
 
+def _normalize_audio(raw: str) -> str:
+    """Normalize audio type to a clean label."""
+    s = (raw or "").lower()
+    if "leg" in s or "subtitle" in s or "sub" in s:
+        return "Legendado"
+    if "dual" in s or "dublado" in s and "leg" in s:
+        return "Dual Áudio"
+    if "dub" in s or "dublado" in s:
+        return "Dublado"
+    if "nacional" in s or "ptbr" in s or "pt-br" in s:
+        return "Dublado"
+    return raw.strip() if raw.strip() else "Dual Áudio"
+
+
 def extract_button_links(page) -> list:
     """
     Extract download options from the site's buttonLinks JS variable.
-    Returns list of dicts with all torrent options for the title.
+    Each top-level item in buttonLinks may represent a movie quality option
+    or a series episode. Returns list of dicts preserving the item title.
     """
     import json
     results = []
     try:
         html = page.content()
-        # Match buttonLinks=[{...}] JS variable
-        m = re.search(r'buttonLinks\s*=\s*(\[.*?\])\s*[,;]', html, re.DOTALL)
+        # Match buttonLinks=[{...}] JS variable (greedy to get full array)
+        m = re.search(r'var\s+buttonLinks\s*=\s*(\[[\s\S]*?\])\s*;', html)
         if not m:
+            m = re.search(r'buttonLinks\s*=\s*(\[[\s\S]*?\])\s*[,;]', html)
+        if not m:
+            log.debug("[btnlinks] buttonLinks not found in page")
             return results
         raw = m.group(1)
-        # Fix JS object notation to valid JSON: key: → "key":
+        # Fix JS object notation to valid JSON
         raw = re.sub(r'([{,]\s*)([a-zA-Z_]\w*)(\s*:)', r'\1"\2"\3', raw)
-        # Fix single quotes to double quotes
         raw = raw.replace("'", '"')
+        # Remove trailing commas before } or ]
+        raw = re.sub(r',\s*([}\]])', r'\1', raw)
         data = json.loads(raw)
         for item in data:
+            item_title = item.get("title", "")
             btn_info = item.get("btnInfo", [])
             for opt in btn_info:
                 magnet = opt.get("url", "")
-                if not magnet:
+                if not magnet or not magnet.startswith("magnet:"):
                     continue
-                audio = opt.get("audioType", "Dual Áudio")
-                res   = opt.get("resolution", "1080p")
+                audio = _normalize_audio(opt.get("audioType", ""))
+                res   = (opt.get("resolution") or "1080p").strip()
                 size  = opt.get("size", "")
                 codec = opt.get("dynamicRange", "")
                 ftype = opt.get("fileType", "movie")
                 results.append({
+                    "item_title": item_title,   # used to identify episodes in series
                     "magnet":     magnet,
                     "quality":    res,
                     "audio_type": audio,
@@ -439,7 +502,7 @@ def extract_button_links(page) -> list:
                     "file_type":  ftype,
                 })
     except Exception as e:
-        log.debug("[btnlinks] parse error: %s", e)
+        log.debug("[btnlinks] parse error: %s  (raw start: %.200s)", e, raw[:200] if 'raw' in dir() else "")
     return results
 
 
@@ -563,19 +626,60 @@ def scrape_title(page, url: str) -> dict | None:
         log.info("[title] %d torrent options found", len(btn_links))
 
         movie_torrents: list = []
-        series_seasons: dict = {}
+        series_seasons: dict = {}   # season_num → list of episode dicts
 
         if title_type in ("series", "anime"):
-            # Group by episode — check if links have episode info in audio_type or codec field
-            # For now, put all as season 1 torrent options (series page = whole season pack)
-            for i, lnk in enumerate(btn_links):
-                series_seasons.setdefault(1, []).append({
-                    "episode_number": i + 1,
-                    "title": f"{lnk['quality']} • {lnk['audio_type']}",
-                    "href":  lnk["magnet"],
-                    "quality": lnk["quality"],
+            # Each item_title may encode season/episode like:
+            # "Episódio 1", "S01E02", "1x03", "Temporada 2 Episódio 5", etc.
+            # Group torrent options by (season, episode)
+            ep_map: dict = {}  # (season, ep) → {"title", "quality", "audio_type", "href", ...}
+
+            for lnk in btn_links:
+                it = lnk.get("item_title", "")
+                # Try S01E02 or 1x02
+                m_se = re.search(r'[Ss](\d+)[Ee](\d+)|(\d+)[xX](\d+)', it)
+                if m_se:
+                    s_num = int(m_se.group(1) or m_se.group(3))
+                    e_num = int(m_se.group(2) or m_se.group(4))
+                else:
+                    # Try "Temporada N Episódio M" or just "Episódio N"
+                    m_t = re.search(r'[Tt]emporada\s*(\d+)', it)
+                    m_e = re.search(r'[Ee]pis[oó]d[io]+\s*(\d+)', it)
+                    s_num = int(m_t.group(1)) if m_t else 1
+                    e_num = int(m_e.group(1)) if m_e else 1
+
+                key = (s_num, e_num)
+                if key not in ep_map:
+                    ep_map[key] = {
+                        "season_number":  s_num,
+                        "episode_number": e_num,
+                        "title":          it or f"Episódio {e_num}",
+                        "torrent_options": [],
+                    }
+                ep_map[key]["torrent_options"].append({
+                    "magnet":     lnk["magnet"],
+                    "quality":    lnk["quality"],
                     "audio_type": lnk["audio_type"],
+                    "size":       lnk.get("size", ""),
                 })
+
+            # If no episode info was parsed, treat each item as a separate episode (batch/season pack)
+            if not ep_map and btn_links:
+                for i, lnk in enumerate(btn_links, 1):
+                    ep_map[(1, i)] = {
+                        "season_number":  1,
+                        "episode_number": i,
+                        "title":          lnk.get("item_title") or f"Episódio {i}",
+                        "torrent_options": [{
+                            "magnet":     lnk["magnet"],
+                            "quality":    lnk["quality"],
+                            "audio_type": lnk["audio_type"],
+                            "size":       lnk.get("size", ""),
+                        }],
+                    }
+
+            for (s_num, _), ep in sorted(ep_map.items()):
+                series_seasons.setdefault(s_num, []).append(ep)
         else:
             movie_torrents = btn_links
 
@@ -665,21 +769,30 @@ def save_title(data: dict) -> bool:
 
                 for ep in episodes:
                     try:
+                        ep_opts = ep.get("torrent_options", [])
+                        # Quality label for episode row = best quality available
+                        best_q = ep_opts[0].get("quality", "1080p") if ep_opts else ep.get("quality", "1080p")
                         er = db.table("episodes").upsert({
                             "season_id":      season_id,
                             "episode_number": ep.get("episode_number", 1),
-                            "title":          ep.get("title", f"Episódio {ep.get('episode_number', 1)}")[:255],
-                            "quality":        ep.get("quality", "1080p"),
+                            "title":          (ep.get("title") or f"Episódio {ep.get('episode_number', 1)}")[:255],
+                            "quality":        best_q,
                         }, on_conflict="season_id,episode_number").execute()
 
-                        if er.data and ep.get("href"):
-                            db.table("torrent_options").upsert({
-                                "episode_id": er.data[0]["id"],
-                                "quality":    ep.get("quality", "1080p"),
-                                "audio_type": ep.get("audio_type", "Dual Áudio"),
-                                "language":   "Português | Inglês",
-                                "magnet":     ep["href"],
-                            }).execute()
+                        if er.data:
+                            ep_id = er.data[0]["id"]
+                            # Save ALL torrent options for this episode
+                            for opt in ep_opts:
+                                magnet_val = opt.get("magnet")
+                                if not magnet_val:
+                                    continue
+                                db.table("torrent_options").upsert({
+                                    "episode_id": ep_id,
+                                    "quality":    opt.get("quality", "1080p"),
+                                    "audio_type": opt.get("audio_type", "Dual Áudio"),
+                                    "language":   "Português | Inglês",
+                                    "magnet":     magnet_val,
+                                }).execute()
                     except Exception as exc:
                         log.debug("[db] episode error: %s", exc)
             except Exception as exc:
