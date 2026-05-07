@@ -55,58 +55,110 @@ def slugify(text: str) -> str:
 
 
 def close_any_popup(page):
-    """Try to close Telegram/ad popups. Call after every navigation."""
-    # First try pressing Escape to dismiss any overlay
-    try:
-        page.keyboard.press("Escape")
-        time.sleep(0.3)
-    except Exception:
-        pass
+    """Aggressively close ALL popups: Comunicado, Telegram, Instagram, ads."""
+    for _ in range(3):  # up to 3 passes in case multiple popups stack
+        closed = False
 
-    candidates = [
-        ".fa-times",
-        ".fa-close",
-        "button.close",
-        "[class*='close-btn']",
-        "[class*='popup-close']",
-        "[class*='modal-close']",
-        "[aria-label='Close']",
-        "[aria-label='Fechar']",
-        "button:has-text('×')",
-        "button:has-text('✕')",
-        "button:has-text('Fechar')",
-        "button:has-text('Não')",
-        "button:has-text('Ignorar')",
-        "a:has-text('×')",
-        "a:has-text('Fechar')",
-        ".notification-close",
-        "#popup-close",
-        ".popup .close",
-        # "Comunicado Importante" overlay - click outside or find any dismiss element
-        "[class*='comunicado'] button",
-        "[class*='notice'] button",
-        "[class*='overlay'] button",
-        "[class*='modal'] .btn-secondary",
-    ]
-    for sel in candidates:
+        # 1. Escape key first
         try:
-            el = page.locator(sel).first
-            if el.is_visible(timeout=400):
-                el.click(timeout=800)
-                log.debug(f"[popup] closed via {sel!r}")
-                time.sleep(0.3)
-                return
+            page.keyboard.press("Escape")
+            time.sleep(0.2)
         except Exception:
             pass
 
-    # If "Comunicado Importante" popup visible, click outside it to dismiss
-    try:
-        if page.locator("text=Comunicado Importante").is_visible(timeout=400):
-            page.mouse.click(10, 10)
-            time.sleep(0.5)
-            log.debug("[popup] dismissed Comunicado via outside click")
-    except Exception:
-        pass
+        # 2. All close/X button selectors
+        candidates = [
+            # Generic close buttons
+            "button.close",
+            "button[class*='close']",
+            "button[class*='Close']",
+            "a[class*='close']",
+            ".fa-times",
+            ".fa-close",
+            ".fa-times-circle",
+            "[class*='close-btn']",
+            "[class*='closeBtn']",
+            "[class*='popup-close']",
+            "[class*='modal-close']",
+            "[class*='dialog-close']",
+            "[aria-label='Close']",
+            "[aria-label='Fechar']",
+            "[aria-label='close']",
+            "[data-dismiss='modal']",
+            "[data-dismiss='popup']",
+            # Text-based close
+            "button:has-text('×')",
+            "button:has-text('✕')",
+            "button:has-text('✖')",
+            "button:has-text('Fechar')",
+            "button:has-text('Não')",
+            "button:has-text('Ignorar')",
+            "button:has-text('Agora não')",
+            "a:has-text('×')",
+            "a:has-text('✕')",
+            "a:has-text('Fechar')",
+            "span:has-text('×')",
+            # Overlay/modal containers
+            ".notification-close",
+            "#popup-close",
+            ".popup .close",
+            ".modal .close",
+            ".overlay .close",
+            # Instagram/Telegram specific
+            "[class*='instagram'] button",
+            "[class*='telegram'] .close",
+            "[class*='social'] .close",
+            # "Comunicado" popup specific
+            "[class*='comunicado'] .close",
+            "[class*='aviso'] .close",
+            "[class*='notice'] .close",
+            # Bootstrap/generic modal
+            ".modal-header .close",
+            ".modal-footer button:first-child",
+        ]
+
+        for sel in candidates:
+            try:
+                els = page.locator(sel).all()
+                for el in els:
+                    if el.is_visible(timeout=300):
+                        el.click(timeout=600)
+                        log.debug("[popup] closed via %r", sel)
+                        time.sleep(0.3)
+                        closed = True
+                        break
+                if closed:
+                    break
+            except Exception:
+                pass
+
+        # 3. Click outside any visible "Comunicado Importante" / modal overlay
+        if not closed:
+            try:
+                for txt in ["Comunicado Importante", "Telegram", "Instagram", "novo endereço", "novo link"]:
+                    if page.locator(f"text={txt}").is_visible(timeout=300):
+                        # click top-left corner (outside modal)
+                        page.mouse.click(5, 5)
+                        time.sleep(0.4)
+                        log.debug("[popup] outside-click to dismiss '%s' popup", txt)
+                        closed = True
+                        break
+            except Exception:
+                pass
+
+        # 4. If modal backdrop visible, click it
+        if not closed:
+            try:
+                backdrop = page.locator(".modal-backdrop, .overlay-bg, .popup-overlay, [class*='backdrop']").first
+                if backdrop.is_visible(timeout=300):
+                    backdrop.click(timeout=600)
+                    time.sleep(0.4)
+                    closed = True
+            except Exception:
+                pass
+
+        if not closed:
+            break  # no more popups found
 
 
 def safe_goto(page, url: str, retries: int = 3) -> bool:
@@ -215,19 +267,13 @@ def navigate_gateway(page) -> str:
         except Exception:
             pass
 
-    # Follow additional "site moved" redirects until we reach stable content
-    for _ in range(5):
-        page.wait_for_timeout(3000)
-        # If another "novo domínio" popup appears, follow it
-        if click_novo_dominio(page):
-            continue
-        # Close any Telegram/ad popups
+    # Dismiss any remaining popups WITHOUT following redirects
+    for _ in range(4):
+        page.wait_for_timeout(2000)
         close_any_popup(page)
-        # If page title looks like real content (not a redirect page), stop
         try:
-            title = page.title().lower()
             url = page.url
-            if "comunicado" not in title and "acesso" not in url and len(url) > 20:
+            if "acesso-starck" not in url:
                 break
         except Exception:
             pass
