@@ -226,32 +226,81 @@ def try_attr(page, selectors: list, attr: str = "src") -> str:
 
 # ─── REAL SITE ────────────────────────────────────────────────────────────────
 
-REAL_SITE = "https://www.starckfilmes-v11.com"
+REAL_SITE    = "https://www.starckfilmes-v11.com"
+GATEWAY_URL  = "https://acesso-starck.com"
+
+
+def _click_btn_ok(page, label: str, wait_after: int = 4000) -> bool:
+    """Click #nt-btn-ok button. Waits for it to appear first."""
+    try:
+        page.wait_for_selector("#nt-btn-ok", state="visible", timeout=8000)
+        page.locator("#nt-btn-ok").first.click(timeout=3000)
+        log.info("[gateway] clicked #nt-btn-ok (%s)", label)
+        page.wait_for_timeout(wait_after)
+        return True
+    except Exception as e:
+        log.debug("[gateway] #nt-btn-ok not found for %s: %s", label, e)
+        return False
 
 
 def navigate_gateway(page) -> str:
-    """Go directly to the real site and dismiss all popups. Returns BASE_URL."""
-    log.info("[gateway] Navigating directly to %s", REAL_SITE)
-    try:
-        page.goto(REAL_SITE, wait_until="domcontentloaded", timeout=30_000)
-    except Exception as e:
-        log.warning("[gateway] load warning (continuing): %s", e)
+    """
+    Opens the gateway, waits for the JS popup to render, clicks through
+    the sequence (Ir para o novo domínio → Próximo → OK), then waits
+    for navigation to the real site. Returns the real site BASE_URL.
+    """
+    log.info("[gateway] Opening %s", GATEWAY_URL)
+    page.goto(GATEWAY_URL, wait_until="domcontentloaded", timeout=30_000)
 
-    page.wait_for_timeout(3000)
+    # Wait for the JS popup to render — it injects #nt-btn-ok into the DOM
+    log.info("[gateway] waiting for popup to render...")
+    try:
+        page.wait_for_selector("#nt-btn-ok", state="visible", timeout=12000)
+        log.info("[gateway] popup visible at url=%s", page.url)
+    except Exception:
+        log.warning("[gateway] #nt-btn-ok not found after 12s — page title: %r", page.title())
+
+    # Step 1: click the "Ir para o novo domínio" link (inside the popup)
+    clicked_link = False
+    for sel in [
+        "a:has-text('Ir para o novo')",
+        "text=Ir para o novo domínio",
+        "text=novo domínio",
+        "text=novo link",
+        "#nt-btn-ok",   # fallback — sometimes this IS the main CTA
+    ]:
+        try:
+            el = page.locator(sel).first
+            if el.is_visible(timeout=2000):
+                el.click(timeout=2000)
+                log.info("[gateway] step1 clicked via %r", sel)
+                page.wait_for_timeout(5000)
+                clicked_link = True
+                break
+        except Exception:
+            pass
+
+    if not clicked_link:
+        log.warning("[gateway] step1: no button found, trying #nt-btn-ok directly")
+
+    # Step 2: "Próximo" — second #nt-btn-ok
+    _click_btn_ok(page, "Proximo", wait_after=4000)
+
+    # Step 3: "OK" — third #nt-btn-ok
+    _click_btn_ok(page, "OK", wait_after=5000)
+
+    # Wait for navigation away from gateway domain
+    log.info("[gateway] waiting for redirect to real site...")
+    try:
+        page.wait_for_url(f"**{REAL_SITE.split('//')[1]}**", timeout=10000)
+        log.info("[gateway] arrived at real site: %s", page.url)
+    except Exception:
+        log.warning("[gateway] timeout waiting for real site, current url: %s", page.url)
+
+    # Dismiss any remaining popups on real site
+    page.wait_for_timeout(2000)
     close_any_popup(page)
     page.wait_for_timeout(1000)
-    close_any_popup(page)
-
-    # If somehow redirected to a gateway domain, navigate back
-    try:
-        current = page.url
-        if REAL_SITE.split("//")[1] not in current:
-            log.warning("[gateway] got redirected to %s — going back to real site", current)
-            page.goto(REAL_SITE, wait_until="domcontentloaded", timeout=30_000)
-            page.wait_for_timeout(3000)
-            close_any_popup(page)
-    except Exception:
-        pass
 
     log.info("[gateway] complete. Final domain: %s", REAL_SITE)
     return REAL_SITE
