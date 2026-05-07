@@ -496,6 +496,17 @@ def scrape_title(page, url: str) -> dict | None:
         if not title_text:
             title_text = url_slug.replace("-", " ").title()
 
+        # ── Clean SEO junk from title ──
+        # Site h1 often contains: "FILME TORRENT (2023) DUBLADO 4K DOWNLOAD"
+        title_text = re.sub(
+            r'\s*(torrent|download|blu-ray|bluray|4k|1080p|720p|legendado|dublado|dual[\s-]?[áa]udio|hdrip|bdrip|webrip|web-dl|hdtv|remux|hdcam|ts\b|cam\b)\s*',
+            ' ', title_text, flags=re.IGNORECASE
+        ).strip()
+        # Remove trailing year in parentheses like "(2024)" if present at end
+        title_text = re.sub(r'\s*\(\s*(?:19|20)\d{2}\s*\)\s*$', '', title_text).strip()
+        # Collapse multiple spaces
+        title_text = re.sub(r'\s{2,}', ' ', title_text).strip()
+
         # ── Type: movie / series / anime ──
         title_type = "movie"
         body_lower = html.lower()
