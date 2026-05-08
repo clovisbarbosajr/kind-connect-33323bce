@@ -4,14 +4,16 @@ interface InwiseLogoProps {
 }
 
 export function InwiseLogo({ className = "", size = "md" }: InwiseLogoProps) {
-  const sizes = { sm: "h-14", md: "h-16", lg: "h-24" };
+  // h values: sm=navbar, md=footer, lg=hero/large display
+  const sizes = { sm: "h-[100px]", md: "h-[120px]", lg: "h-[160px]" };
 
   return (
-    <div className={`flex items-center ${className}`}>
+    <div className={`flex items-center justify-center ${className}`}>
       <img
         src="/logo.png"
         alt="INWISE Movies"
-        className={`${sizes[size]} w-auto object-contain`}
+        className={`${sizes[size]} w-auto object-contain block`}
+        style={{ verticalAlign: 'middle' }}
         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
       />
     </div>

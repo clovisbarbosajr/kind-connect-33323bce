@@ -214,7 +214,7 @@ function Index() {
             style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, transparent 100%)' }} />
         )}
         <div className="relative px-4 lg:px-8">
-          <nav className="flex items-center gap-0 h-[68px] w-full text-white">
+          <nav className="flex items-center gap-0 h-[112px] w-full text-white">
             <div className="flex items-center mr-6 flex-shrink-0">
               <Link to="/" search={{ filter: '' }}>
                 <InwiseLogo size="sm" />
