@@ -144,7 +144,6 @@ function Index() {
           q = q.in('id', titleIds);
         } else if (filter === 'movie') q = q.eq('type', 'movie');
         else if (filter === 'series') q = q.eq('type', 'series');
-        else if (filter === 'anime') q = q.eq('type', 'anime');
         else if (filter === 'top') q = q.not('imdb_rating', 'is', null).order('imdb_rating', { ascending: false });
         else if (filter === '2026') q = q.eq('year', 2026);
 
@@ -232,9 +231,7 @@ function Index() {
               <li className="flex-shrink-0">
                 <Link to="/" search={{ filter: 'series' }} className={filter === 'series' ? navActive : navInactive}>Séries</Link>
               </li>
-              <li className="flex-shrink-0">
-                <Link to="/" search={{ filter: 'anime' }} className={filter === 'anime' ? navActive : navInactive}>Animes</Link>
-              </li>
+
               <li className="flex-shrink-0">
                 <DropdownMenu>
                   <DropdownMenuTrigger className={`${navInactive} flex items-center gap-1 outline-none`}>
@@ -399,7 +396,6 @@ function Index() {
               ? `Gênero: ${filter.replace('genre_', '')}`
               : filter === 'movie' ? 'Filmes'
               : filter === 'series' ? 'Séries'
-              : filter === 'anime' ? 'Animes'
               : filter === 'top' ? 'Top IMDb'
               : filter === '2026' ? 'Lançamentos 2026'
               : 'Catálogo'}
@@ -410,7 +406,6 @@ function Index() {
                 { label: 'Todos', val: '' },
                 { label: 'Filmes', val: 'movie' },
                 { label: 'Séries', val: 'series' },
-                { label: 'Animes', val: 'anime' },
               ].map(({ label, val }) => (
                 <Link key={val} to="/" search={{ filter: val }}
                   className="inline-flex items-center justify-center rounded-md h-7 px-3 text-[11px] font-semibold uppercase tracking-wide transition-all duration-200 cursor-pointer"
