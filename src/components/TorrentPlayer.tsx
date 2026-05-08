@@ -63,20 +63,38 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
 
     let destroyed = false;
     let client: any = null;
+    let nopeersTimer: ReturnType<typeof setTimeout> | undefined;
 
-    // Dynamic import keeps webtorrent out of the SSR bundle entirely
+    // WSS trackers required for WebRTC browser streaming
+    const wssTrackers = [
+      'wss://tracker.openwebtorrent.com',
+      'wss://tracker.webtorrent.dev',
+      'wss://tracker.btorrent.xyz',
+      'wss://tracker.files.fm:7073/announce',
+    ];
+
     // @ts-ignore
     import('webtorrent/dist/webtorrent.min.js').then((mod: any) => {
       if (destroyed) return;
       const WebTorrent = mod.default ?? mod;
       client = new WebTorrent();
 
+      // 30s timeout: if no peers, suggest download
+      nopeersTimer = setTimeout(() => {
+        if (!destroyed) {
+          setError('Sem peers WebRTC disponíveis para streaming direto. Use o botão "Baixar Torrent" para assistir com seu player local (VLC, etc).');
+          setStatus('error');
+        }
+      }, 30000);
+
     client.on('error', (err: any) => {
+      clearTimeout(nopeersTimer);
       setError(String(err?.message || err));
       setStatus('error');
     });
 
-    client.add(magnet, (torrent: any) => {
+    client.add(magnet, { announce: wssTrackers }, (torrent: any) => {
+      clearTimeout(nopeersTimer);
       setStatusMsg(`Torrent encontrado: ${torrent.name || 'desconhecido'}`);
 
       // Largest video file
@@ -134,6 +152,7 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
 
     return () => {
       destroyed = true;
+      clearTimeout(nopeersTimer);
       if (client) client.destroy();
     };
   }, [magnet]);
@@ -240,7 +259,6 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
         className="w-full h-full object-contain"
         onClick={togglePlay}
         poster={poster}
-        crossOrigin="anonymous"
       >
         {subtitleTrack && (
           <track
@@ -292,9 +310,14 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
             className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/95 p-8 text-center gap-4"
           >
             <WifiOff className="w-16 h-16 text-red-500" />
-            <h3 className="text-xl font-black uppercase tracking-widest text-red-400">Erro de Reprodução</h3>
-            <p className="text-zinc-500 text-sm max-w-sm">{error || 'Não foi possível reproduzir este torrent.'}</p>
-            <p className="text-zinc-600 text-xs">Tente baixar o arquivo e assistir localmente.</p>
+            <h3 className="text-xl font-black uppercase tracking-widest text-red-400">Sem Streaming Direto</h3>
+            <p className="text-zinc-400 text-sm max-w-sm">{error || 'Não foi possível reproduzir este torrent.'}</p>
+            <button
+              onClick={() => { window.location.href = magnet; }}
+              className="mt-2 px-6 py-3 bg-[#00d4ff] text-black font-black uppercase tracking-widest text-xs rounded-full hover:bg-white transition-colors flex items-center gap-2 mx-auto"
+            >
+              ⬇ Baixar Torrent
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
