@@ -4,7 +4,7 @@ interface InwiseLogoProps {
 }
 
 export function InwiseLogo({ className = "", size = "md" }: InwiseLogoProps) {
-  const sizes = { sm: "h-7", md: "h-9", lg: "h-14" };
+  const sizes = { sm: "h-9", md: "h-11", lg: "h-16" };
   const textSizes = { sm: "text-lg", md: "text-2xl", lg: "text-4xl" };
 
   return (
@@ -13,7 +13,7 @@ export function InwiseLogo({ className = "", size = "md" }: InwiseLogoProps) {
         src="/logo.png"
         alt="INWISE"
         className={`${sizes[size]} w-auto object-contain flex-shrink-0`}
-        style={{ mixBlendMode: 'screen' }}
+        style={{ imageRendering: 'crisp-edges' }}
         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
       />
       <span className={`${textSizes[size]} font-black tracking-tight leading-none`}>
