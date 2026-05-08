@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Play, Star, Calendar, ChevronLeft, Download, Info,
-  Tv, X, ChevronDown, Magnet, MonitorPlay
+  Play, Star, ChevronLeft, Download, Info,
+  Tv, X, ChevronDown, Youtube
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,13 @@ function cleanTitle(t: string): string {
     .trim();
 }
 
+function formatDuration(seconds: number | null): string {
+  if (!seconds) return '';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return h > 0 ? `${h}h ${m}min` : `${m}min`;
+}
+
 interface TorrentChoice {
   magnet: string;
   label: string;
@@ -33,9 +40,10 @@ interface TorrentChoice {
 
 function Watch() {
   const { slug } = Route.useParams();
-  const [title, setTitle]       = useState<any>(null);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState<any>(null);
+  const [title, setTitle]           = useState<any>(null);
+  const [related, setRelated]       = useState<any[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<any>(null);
   const [openSeasons, setOpenSeasons] = useState<Set<number>>(new Set([1]));
   const [choiceModal, setChoiceModal] = useState<TorrentChoice | null>(null);
 
@@ -44,22 +52,20 @@ function Watch() {
       try {
         const { data, error: fetchError } = await supabase
           .from('titles')
-          .select(`
-            *,
-            torrent_options(*),
-            seasons(
-              *,
-              episodes(
-                *,
-                torrent_options(*)
-              )
-            )
-          `)
+          .select(`*, torrent_options(*), seasons(*, episodes(*, torrent_options(*)))`)
           .eq('slug', slug)
           .single();
-
         if (fetchError) throw fetchError;
         setTitle(data);
+
+        // load related titles
+        const { data: rel } = await supabase
+          .from('titles')
+          .select('id, title, poster, imdb_rating, year, slug, type')
+          .eq('type', data.type)
+          .neq('slug', slug)
+          .limit(8);
+        setRelated(rel || []);
       } catch (e) {
         console.error("Erro ao carregar:", e);
         setError(e);
@@ -73,33 +79,26 @@ function Watch() {
   const toggleSeason = (num: number) => {
     setOpenSeasons(prev => {
       const next = new Set(prev);
-      if (next.has(num)) next.delete(num);
-      else next.add(num);
+      if (next.has(num)) next.delete(num); else next.add(num);
       return next;
     });
   };
 
-  // Show choice dialog before playing
   const handleTorrentClick = (magnet: string, label: string, quality = "", audio = "") => {
     setChoiceModal({ magnet, label, quality, audio });
   };
 
-  const openPlayer = (magnet: string, _label: string) => {
-    setChoiceModal(null);
-    window.location.href = magnet;
-  };
-
-  const downloadTorrent = (magnet: string) => {
+  const openPlayer = (magnet: string) => {
     setChoiceModal(null);
     window.location.href = magnet;
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white p-8">
-        <Skeleton className="w-full h-[55vh] rounded-2xl bg-zinc-900 mb-8" />
-        <div className="max-w-4xl space-y-4">
-          <Skeleton className="h-12 w-96 bg-zinc-800" />
+      <div className="min-h-screen bg-[#0d0d0d] text-white p-8">
+        <Skeleton className="w-full h-[42vh] rounded-none bg-zinc-900 mb-8" />
+        <div className="max-w-5xl mx-auto space-y-4">
+          <Skeleton className="h-8 w-80 bg-zinc-800" />
           <Skeleton className="h-4 w-full bg-zinc-800" />
           <Skeleton className="h-4 w-2/3 bg-zinc-800" />
         </div>
@@ -109,10 +108,10 @@ function Watch() {
 
   if (error || !title) {
     return (
-      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-8 text-center">
-        <h2 className="text-4xl font-black text-primary mb-4 uppercase">Conteúdo Indisponível</h2>
-        <p className="text-zinc-500 mb-8 max-w-md">Este título não foi encontrado ou ainda não foi importado pelo crawler.</p>
-        <Button asChild className="bg-primary text-black font-black uppercase tracking-widest px-8 rounded-full">
+      <div className="min-h-screen bg-[#0d0d0d] text-white flex flex-col items-center justify-center p-8 text-center">
+        <h2 className="text-2xl font-bold text-primary mb-4">Conteúdo Indisponível</h2>
+        <p className="text-zinc-500 mb-8 max-w-md">Este título não foi encontrado.</p>
+        <Button asChild className="bg-primary text-black font-bold px-8 rounded-full">
           <Link to="/">Voltar para Home</Link>
         </Button>
       </div>
@@ -121,307 +120,357 @@ function Watch() {
 
   const sortedSeasons = (title.seasons || []).sort((a: any, b: any) => a.season_number - b.season_number);
   const isSeries = title.type === 'series' || title.type === 'anime';
+  const displayTitle = cleanTitle(title.title);
+  const firstOpt = title.torrent_options?.[0];
+  const mainLanguage = firstOpt?.language || firstOpt?.audio_type || '';
+  const mainSize = firstOpt?.size || '';
+  const mainQuality = firstOpt?.quality || '1080p';
+  const youtubeSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(displayTitle + ' trailer')}`;
+  const typeLabel = title.type === 'movie' ? 'Filme' : title.type === 'anime' ? 'Anime' : 'Série';
 
   return (
-    <div className="min-h-screen bg-black text-white selection:bg-primary selection:text-black">
+    <div className="min-h-screen bg-[#0d0d0d] text-white">
 
-      {/* ── Choice Modal (Assistir / Baixar) ── */}
+      {/* ── Choice Modal ── */}
       <AnimatePresence>
         {choiceModal && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4"
             onClick={() => setChoiceModal(null)}
           >
             <motion.div
-              initial={{ scale: 0.92, opacity: 0, y: 20 }}
+              initial={{ scale: 0.93, opacity: 0, y: 16 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.92, opacity: 0, y: 20 }}
+              exit={{ scale: 0.93, opacity: 0, y: 16 }}
               transition={{ type: "spring", stiffness: 300, damping: 28 }}
               onClick={e => e.stopPropagation()}
-              className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 max-w-sm w-full shadow-2xl"
+              className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
             >
-              {/* Header */}
-              <div className="flex items-start justify-between mb-6">
+              <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="font-black text-lg uppercase tracking-tight text-white italic">{cleanTitle(title.title)}</h3>
-                  <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{choiceModal.label}</p>
+                  <h3 className="font-bold text-base text-white">{displayTitle}</h3>
+                  <p className="text-zinc-500 text-xs mt-0.5">{choiceModal.label}</p>
                 </div>
-                <button onClick={() => setChoiceModal(null)} className="text-zinc-600 hover:text-white transition-colors ml-4 mt-0.5">
+                <button onClick={() => setChoiceModal(null)} className="text-zinc-600 hover:text-white ml-3">
                   <X className="w-5 h-5" />
                 </button>
               </div>
-
-              {/* Quality badge */}
-              <div className="flex gap-2 mb-6">
+              <div className="flex gap-2 mb-5">
                 {choiceModal.quality && (
-                  <Badge className="bg-[#00d4ff] text-black font-black text-[10px] uppercase">
-                    {choiceModal.quality}
-                  </Badge>
+                  <Badge className="bg-[#00d4ff] text-black font-bold text-[10px] uppercase">{choiceModal.quality}</Badge>
                 )}
                 {choiceModal.audio && (
-                  <Badge className="bg-zinc-800 text-zinc-300 font-black text-[10px] uppercase border-none">
-                    {choiceModal.audio}
-                  </Badge>
+                  <Badge className="bg-zinc-800 text-zinc-300 font-bold text-[10px] uppercase border-none">{choiceModal.audio}</Badge>
                 )}
               </div>
-
-              {/* Buttons */}
               <div className="flex flex-col gap-3">
                 <Button
-                  onClick={() => openPlayer(choiceModal.magnet, choiceModal.label)}
-                  className="w-full h-14 bg-[#00d4ff] hover:bg-white text-black font-black uppercase tracking-widest text-sm rounded-2xl border-none gap-3 transition-all hover:scale-[1.02]"
+                  onClick={() => openPlayer(choiceModal.magnet)}
+                  className="w-full h-12 bg-[#00d4ff] hover:bg-cyan-300 text-black font-bold rounded-xl gap-2"
                 >
-                  <Play className="w-5 h-5" />
-                  Abrir no Player Local
+                  <Play className="w-4 h-4 fill-current" /> Abrir no Player Local
                 </Button>
                 <Button
-                  onClick={() => downloadTorrent(choiceModal.magnet)}
+                  onClick={() => openPlayer(choiceModal.magnet)}
                   variant="outline"
-                  className="w-full h-14 bg-transparent border border-zinc-700 hover:border-zinc-500 text-white font-black uppercase tracking-widest text-sm rounded-2xl gap-3 transition-all hover:bg-zinc-900"
+                  className="w-full h-12 bg-transparent border border-zinc-700 hover:border-zinc-500 text-white font-bold rounded-xl gap-2"
                 >
-                  <Download className="w-5 h-5" />
-                  Baixar Torrent
+                  <Download className="w-4 h-4" /> Baixar Torrent
                 </Button>
               </div>
-
-              <p className="text-zinc-700 text-[9px] font-black uppercase tracking-widest text-center mt-4">
-                Ambos abrem o magnet no seu player local (VLC, qBittorrent etc.)
+              <p className="text-zinc-700 text-[9px] text-center mt-3 uppercase tracking-widest">
+                Abre o magnet no seu player (VLC, qBittorrent etc.)
               </p>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Backdrop Hero */}
-      <div className="relative h-[60vh] w-full overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-black/10 z-10" />
-        <div className="absolute inset-0 bg-gradient-to-r from-black via-black/20 to-transparent z-10" />
-        <motion.img
-          initial={{ scale: 1.08, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 1.2 }}
-          src={title.backdrop || title.poster}
-          className="w-full h-full object-cover"
-          alt={cleanTitle(title.title)}
-        />
-
-        {/* Top bar */}
-        <div className="absolute top-0 left-0 right-0 z-20 px-6 lg:px-10 py-5 flex items-center justify-between">
-          <Button asChild variant="ghost" className="text-white hover:text-primary gap-2 font-bold uppercase tracking-widest text-xs px-0 hover:bg-transparent">
-            <Link to="/"><ChevronLeft className="w-4 h-4" /> Voltar</Link>
-          </Button>
-          <Link to="/"><InwiseLogo size="sm" /></Link>
-        </div>
-
-        {/* Title info */}
-        <div className="absolute bottom-8 left-6 lg:left-10 z-20 max-w-2xl">
-          <div className="flex items-center gap-3 mb-3 flex-wrap">
-            <Badge className="bg-[#00d4ff] text-black font-black uppercase text-[9px] px-3 py-1 tracking-widest">
-              {title.type === 'movie' ? 'Filme' : title.type === 'anime' ? 'Anime' : 'Série'}
-            </Badge>
-            {title.imdb_rating && (
-              <div className="flex items-center gap-1.5 font-black text-base text-yellow-400">
-                <Star className="w-4 h-4 fill-current" />
-                {Number(title.imdb_rating).toFixed(1)}
-              </div>
-            )}
-            {title.year && (
-              <span className="text-zinc-400 font-black text-sm flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5" /> {title.year}
-              </span>
-            )}
-            <Badge variant="outline" className="border-zinc-600 text-zinc-300 text-[9px] font-black">4K ULTRA HD</Badge>
-          </div>
-
-          <h1 className="text-4xl lg:text-6xl font-black mb-3 tracking-tighter uppercase italic text-[#00d4ff] leading-none drop-shadow-2xl">
-            {cleanTitle(title.title)}
-          </h1>
-          {title.synopsis && (
-            <p className="text-sm text-zinc-300 line-clamp-2 max-w-lg leading-relaxed">
-              {title.synopsis}
-            </p>
-          )}
-        </div>
+      {/* ── Header ── */}
+      <div className="sticky top-0 z-30 bg-[#0d0d0d]/90 backdrop-blur-md border-b border-zinc-800/40 px-4 lg:px-8 py-3 flex items-center justify-between">
+        <Button asChild variant="ghost" className="text-zinc-400 hover:text-white gap-1.5 font-medium text-sm px-0 hover:bg-transparent">
+          <Link to="/"><ChevronLeft className="w-4 h-4" /> Voltar</Link>
+        </Button>
+        <Link to="/"><InwiseLogo size="sm" /></Link>
+        <div className="w-20" />
       </div>
 
-      {/* Content Section */}
-      <div className="max-w-6xl mx-auto px-6 lg:px-10 py-10">
-        {isSeries && sortedSeasons.length > 0 ? (
-          /* ── SERIES LAYOUT ── */
-          <div className="space-y-4">
-            <h2 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2 mb-6">
-              <Tv className="w-5 h-5 text-primary" /> Temporadas &amp; Episódios
-            </h2>
+      {/* ── Backdrop ── */}
+      <div className="relative w-full overflow-hidden" style={{ height: '42vh', minHeight: '220px', maxHeight: '420px' }}>
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0d0d0d] via-[#0d0d0d]/40 to-transparent z-10" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0d0d0d]/60 to-transparent z-10" />
+        <img
+          src={title.backdrop || title.poster}
+          className="w-full h-full object-cover object-center"
+          alt={displayTitle}
+          style={{ filter: 'brightness(0.85)' }}
+        />
+      </div>
 
-            {sortedSeasons.map((season: any) => {
-              const episodes = (season.episodes || []).sort((a: any, b: any) => a.episode_number - b.episode_number);
-              const isOpen = openSeasons.has(season.season_number);
+      {/* ── Main content ── */}
+      <div className="max-w-6xl mx-auto px-4 lg:px-8 pb-16">
 
-              return (
-                <div key={season.id} className="bg-zinc-900/40 border border-zinc-800/60 rounded-2xl overflow-hidden">
-                  {/* Season header */}
-                  <button
-                    onClick={() => toggleSeason(season.season_number)}
-                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-zinc-800/40 transition group"
-                  >
-                    <div className="flex items-center gap-4">
-                      <span className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-black text-sm">
-                        {season.season_number}
-                      </span>
-                      <span className="font-black text-base uppercase tracking-wide">
-                        Temporada {season.season_number}
-                      </span>
-                      <Badge className="bg-zinc-800 text-zinc-400 border-none font-black text-[9px]">
-                        {episodes.length} ep.
-                      </Badge>
-                    </div>
-                    <ChevronDown className={`w-5 h-5 text-zinc-500 group-hover:text-primary transition-all ${isOpen ? 'rotate-180' : ''}`} />
-                  </button>
+        {/* ── Title card (poster + title + badges) ── */}
+        <div className="flex gap-5 -mt-16 relative z-20 mb-8">
+          {/* Poster */}
+          <div className="flex-shrink-0 w-28 sm:w-36">
+            <img
+              src={title.poster}
+              alt={displayTitle}
+              className="w-full rounded-lg shadow-2xl border border-zinc-800/50"
+              style={{ aspectRatio: '2/3', objectFit: 'cover' }}
+            />
+          </div>
+          {/* Title + meta */}
+          <div className="flex flex-col justify-end pb-1">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <Badge className="bg-[#00d4ff] text-black font-bold text-[10px] uppercase px-2">{typeLabel}</Badge>
+              {mainQuality && (
+                <Badge className="bg-zinc-800 text-zinc-300 font-bold text-[10px] uppercase border-none">{mainQuality}</Badge>
+              )}
+              {title.imdb_rating && (
+                <span className="flex items-center gap-1 text-yellow-400 font-bold text-sm">
+                  <Star className="w-3.5 h-3.5 fill-current" />
+                  {Number(title.imdb_rating).toFixed(1)}
+                </span>
+              )}
+            </div>
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white leading-tight mb-1">
+              {displayTitle}
+            </h1>
+            {title.year && (
+              <p className="text-zinc-500 text-sm">{title.year}</p>
+            )}
+          </div>
+        </div>
 
-                  {/* Episodes list */}
-                  {isOpen && (
-                    <div className="border-t border-zinc-800/50 divide-y divide-zinc-800/30">
-                      {episodes.map((ep: any) => {
-                        const opts = ep.torrent_options || [];
-                        return (
-                          <div key={ep.id} className="px-6 py-4 hover:bg-zinc-800/20 transition group">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                              <div className="flex items-start gap-4">
-                                <span className="min-w-[2.5rem] text-center font-black text-xs text-primary bg-primary/10 rounded-lg px-2 py-1.5">
-                                  EP{String(ep.episode_number).padStart(2, '0')}
-                                </span>
-                                <div>
-                                  <h4 className="font-bold text-sm text-white group-hover:text-primary transition leading-tight">
-                                    {ep.title || `Episódio ${ep.episode_number}`}
-                                  </h4>
-                                  {ep.quality && (
-                                    <span className="text-[10px] text-zinc-600 font-black uppercase">{ep.quality}</span>
-                                  )}
+        {/* ── Two-column layout ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+          {/* ── LEFT: main info ── */}
+          <div className="lg:col-span-2 space-y-6">
+
+            {/* Info table */}
+            <div className="bg-zinc-900/40 border border-zinc-800/40 rounded-xl overflow-hidden">
+              {[
+                ['Lançamento',          title.year],
+                ['IMDB',               title.imdb_rating ? `★ ${Number(title.imdb_rating).toFixed(1)}` : null],
+                ['Tipo',               typeLabel],
+                ['Qualidade',          mainQuality || '1080p'],
+                ['Idioma',             mainLanguage || 'Português | Inglês'],
+                ['Legenda',            'PT-BR'],
+                ...(mainSize ? [['Tamanho', mainSize]] : []),
+              ].filter(([, v]) => v).map(([label, value], i, arr) => (
+                <div
+                  key={String(label)}
+                  className={`flex items-center justify-between px-5 py-3 ${i < arr.length - 1 ? 'border-b border-zinc-800/40' : ''}`}
+                >
+                  <span className="text-zinc-500 text-sm font-medium">{label}</span>
+                  <span className={`text-sm font-semibold ${label === 'IMDB' ? 'text-yellow-400' : 'text-white'}`}>{String(value)}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Synopsis */}
+            {title.synopsis && (
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Sinopse</h3>
+                <p className="text-sm text-zinc-300 leading-relaxed">
+                  {title.synopsis.replace(/^sinopse:\s*/i, '')}
+                </p>
+              </div>
+            )}
+
+            {/* YouTube trailer button */}
+            <a
+              href={youtubeSearchUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 w-full bg-zinc-900/60 hover:bg-zinc-800/60 border border-zinc-800/50 hover:border-zinc-700 rounded-xl px-5 py-4 transition group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-red-600/10 flex items-center justify-center flex-shrink-0 group-hover:bg-red-600/20 transition">
+                <Youtube className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Ver Trailer no YouTube</p>
+                <p className="text-xs text-zinc-500">{displayTitle} · trailer legendado</p>
+              </div>
+            </a>
+
+            {/* Torrent section */}
+            {isSeries ? (
+              <div className="space-y-3">
+                <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                  <Tv className="w-4 h-4 text-primary" /> Temporadas &amp; Episódios
+                </h2>
+                {sortedSeasons.map((season: any) => {
+                  const episodes = (season.episodes || []).sort((a: any, b: any) => a.episode_number - b.episode_number);
+                  const isOpen = openSeasons.has(season.season_number);
+                  return (
+                    <div key={season.id} className="bg-zinc-900/40 border border-zinc-800/40 rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => toggleSeason(season.season_number)}
+                        className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-zinc-800/40 transition"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs">
+                            {season.season_number}
+                          </span>
+                          <span className="font-semibold text-sm">Temporada {season.season_number}</span>
+                          <Badge className="bg-zinc-800 text-zinc-400 border-none font-bold text-[9px]">
+                            {episodes.length} ep.
+                          </Badge>
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {isOpen && (
+                        <div className="border-t border-zinc-800/40 divide-y divide-zinc-800/30">
+                          {episodes.map((ep: any) => {
+                            const opts = ep.torrent_options || [];
+                            return (
+                              <div key={ep.id} className="px-5 py-3.5 hover:bg-zinc-800/20 transition">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <div className="flex items-center gap-3">
+                                    <span className="min-w-[2.5rem] text-center font-bold text-xs text-primary bg-primary/10 rounded-md px-2 py-1">
+                                      EP{String(ep.episode_number).padStart(2, '0')}
+                                    </span>
+                                    <span className="text-sm font-medium text-zinc-200">
+                                      {ep.title || `Episódio ${ep.episode_number}`}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {opts.length > 0 ? opts.map((opt: any) => (
+                                      <Button
+                                        key={opt.id}
+                                        size="sm"
+                                        onClick={() => handleTorrentClick(
+                                          opt.magnet,
+                                          `T${season.season_number}E${String(ep.episode_number).padStart(2,'0')} · ${opt.quality || ''} ${opt.audio_type || ''}`.trim(),
+                                          opt.quality,
+                                          opt.audio_type
+                                        )}
+                                        className="h-7 px-3 bg-zinc-800 hover:bg-primary hover:text-black text-white border-none font-bold text-[10px] uppercase rounded-md gap-1"
+                                      >
+                                        <Play className="w-2.5 h-2.5 fill-current" />
+                                        {opt.quality || '1080p'}
+                                      </Button>
+                                    )) : (
+                                      <span className="text-[10px] text-zinc-700 font-bold uppercase italic">Em breve</span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                              <div className="flex flex-wrap gap-2 sm:flex-shrink-0">
-                                {opts.length > 0 ? opts.map((opt: any) => (
-                                  <Button
-                                    key={opt.id}
-                                    size="sm"
-                                    onClick={() => handleTorrentClick(
-                                      opt.magnet,
-                                      `T${season.season_number}E${String(ep.episode_number).padStart(2,'0')} • ${opt.quality || ''} ${opt.audio_type || ''}`.trim(),
-                                      opt.quality,
-                                      opt.audio_type
-                                    )}
-                                    className="h-8 px-4 bg-zinc-800 hover:bg-primary hover:text-black text-white border-none font-black text-[10px] uppercase transition-all rounded-lg gap-1.5"
-                                  >
-                                    <Play className="w-3 h-3 fill-current" />
-                                    {opt.quality || '1080p'}
-                                    {opt.audio_type && ` • ${opt.audio_type}`}
-                                  </Button>
-                                )) : (
-                                  <span className="text-[10px] text-zinc-700 font-black uppercase italic">Em breve</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          /* ── MOVIE LAYOUT ── */
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-            <div className="lg:col-span-2 space-y-6">
-              <h2 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
-                <Download className="w-5 h-5 text-primary" /> Opções de Torrent
-              </h2>
-
-              {title.torrent_options?.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {title.torrent_options.map((opt: any) => (
-                    <div
-                      key={opt.id}
-                      onClick={() => handleTorrentClick(opt.magnet, `${opt.quality || ''} ${opt.audio_type || ''}`.trim(), opt.quality, opt.audio_type)}
-                      className="bg-zinc-900/60 border border-zinc-800/50 p-5 rounded-2xl flex flex-col gap-3 hover:border-primary/50 transition cursor-pointer group"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <Badge className="bg-primary text-black font-black px-2 mb-1.5 uppercase text-[10px]">
-                            {opt.quality || '1080p'}
-                          </Badge>
-                          <h4 className="font-black text-lg italic">{opt.audio_type || 'Dual Áudio'}</h4>
-                          {opt.language && (
-                            <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">{opt.language}</p>
-                          )}
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+                  <Download className="w-4 h-4 text-primary" /> Opções de Download
+                </h2>
+                {title.torrent_options?.length > 0 ? (
+                  <div className="space-y-3">
+                    {title.torrent_options.map((opt: any) => (
+                      <div
+                        key={opt.id}
+                        onClick={() => handleTorrentClick(opt.magnet, `${opt.quality || ''} ${opt.audio_type || ''}`.trim(), opt.quality, opt.audio_type)}
+                        className="flex items-center justify-between bg-zinc-900/50 border border-zinc-800/50 hover:border-primary/40 rounded-xl px-5 py-4 cursor-pointer transition group"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center flex-shrink-0 group-hover:bg-primary/10 transition">
+                            <Download className="w-4 h-4 text-zinc-400 group-hover:text-primary transition" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <Badge className="bg-[#00d4ff]/10 text-[#00d4ff] border border-[#00d4ff]/20 font-bold text-[10px] uppercase">
+                                {opt.quality || '1080p'}
+                              </Badge>
+                              {opt.audio_type && (
+                                <span className="text-xs text-zinc-400 font-medium">{opt.audio_type}</span>
+                              )}
+                            </div>
+                            {opt.size && (
+                              <p className="text-xs text-zinc-600">{opt.size}</p>
+                            )}
+                          </div>
                         </div>
-                        <div className="w-11 h-11 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-400 group-hover:bg-primary group-hover:text-black transition-all">
-                          <Play className="w-5 h-5 fill-current" />
-                        </div>
-                      </div>
-                      <div className="flex gap-2 w-full">
-                        <Button className="flex-1 bg-[#00d4ff] group-hover:bg-white text-black font-black uppercase tracking-widest py-6 rounded-xl transition-all border-none text-xs gap-2">
-                          <MonitorPlay className="w-4 h-4" /> Assistir
-                        </Button>
                         <Button
-                          onClick={e => { e.stopPropagation(); downloadTorrent(opt.magnet); }}
-                          variant="outline"
-                          className="h-full px-4 bg-transparent border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white rounded-xl"
+                          className="h-9 px-5 bg-[#4ade80] hover:bg-[#22c55e] text-black font-bold text-sm rounded-lg border-none gap-2 flex-shrink-0"
+                          onClick={e => { e.stopPropagation(); handleTorrentClick(opt.magnet, `${opt.quality || ''} ${opt.audio_type || ''}`.trim(), opt.quality, opt.audio_type); }}
                         >
                           <Download className="w-4 h-4" />
+                          DOWNLOAD
                         </Button>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-16 border-2 border-dashed border-zinc-900 rounded-2xl text-center">
-                  <p className="text-zinc-700 font-black uppercase tracking-[0.3em] text-xs">
-                    Nenhum torrent disponível. Execute o crawler para importar.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Movie info sidebar */}
-            <div className="space-y-6">
-              <h2 className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
-                <Info className="w-5 h-5 text-primary" /> Informações
-              </h2>
-              <div className="bg-zinc-900/50 border border-zinc-800/50 p-6 rounded-2xl space-y-4">
-                {[
-                  ['Título', title.title],
-                  ['Ano', title.year],
-                  ['IMDb', title.imdb_rating ? `★ ${Number(title.imdb_rating).toFixed(1)}` : null],
-                  ['Tipo', title.type === 'movie' ? 'Filme' : title.type === 'anime' ? 'Anime' : 'Série'],
-                  ['Qualidade', '4K / 1080p'],
-                ].filter(([, v]) => v).map(([label, value]) => (
-                  <div key={String(label)} className="flex justify-between border-b border-zinc-800/40 pb-3 last:border-0 last:pb-0">
-                    <span className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">{label}</span>
-                    <span className={`font-black text-sm ${label === 'IMDb' ? 'text-yellow-400' : ''}`}>{String(value)}</span>
+                    ))}
                   </div>
+                ) : (
+                  <div className="p-10 border border-dashed border-zinc-800 rounded-xl text-center">
+                    <p className="text-zinc-700 text-xs uppercase tracking-widest font-bold">
+                      Nenhum torrent disponível
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── RIGHT: você pode gostar ── */}
+          <div className="space-y-4">
+            <h2 className="text-sm font-bold uppercase tracking-widest text-zinc-400 flex items-center gap-2">
+              <Info className="w-4 h-4 text-primary" /> Você pode gostar
+            </h2>
+            {related.length > 0 ? (
+              <div className="space-y-3">
+                {related.slice(0, 8).map((rel: any) => (
+                  <Link
+                    key={rel.id}
+                    to="/watch/$slug"
+                    params={{ slug: rel.slug }}
+                    className="flex gap-3 group hover:bg-zinc-800/40 rounded-xl p-2 transition"
+                  >
+                    <img
+                      src={rel.poster}
+                      alt={cleanTitle(rel.title)}
+                      className="w-14 rounded-lg flex-shrink-0 object-cover border border-zinc-800/50 group-hover:border-primary/30 transition"
+                      style={{ aspectRatio: '2/3' }}
+                    />
+                    <div className="flex flex-col justify-center min-w-0">
+                      <p className="text-sm font-medium text-zinc-200 group-hover:text-white transition line-clamp-2 leading-tight">
+                        {cleanTitle(rel.title)}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        {rel.imdb_rating && (
+                          <span className="flex items-center gap-1 text-yellow-400 text-xs font-bold">
+                            <Star className="w-2.5 h-2.5 fill-current" />
+                            {Number(rel.imdb_rating).toFixed(1)}
+                          </span>
+                        )}
+                        {rel.year && (
+                          <span className="text-zinc-600 text-xs">{rel.year}</span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
                 ))}
               </div>
-
-              {title.synopsis && (
-                <div className="bg-zinc-900/30 border border-zinc-800/30 p-6 rounded-2xl">
-                  <h3 className="font-black uppercase text-[10px] tracking-[0.3em] text-zinc-500 mb-3">Sinopse</h3>
-                  <p className="text-sm text-zinc-300 leading-relaxed">{title.synopsis}</p>
-                </div>
-              )}
-            </div>
+            ) : (
+              <p className="text-zinc-700 text-xs">Nenhum título relacionado.</p>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      <footer className="border-t border-zinc-900 py-12 px-6 text-center">
-        <Link to="/"><InwiseLogo size="md" className="justify-center mb-3" /></Link>
-        <p className="text-[9px] font-black uppercase tracking-[0.4em] text-zinc-700">
-          © 2026 INWISE MOVIES • STREAMING DE ALTA FIDELIDADE
+      <footer className="border-t border-zinc-800/40 py-8 px-6 text-center">
+        <Link to="/"><InwiseLogo size="md" className="justify-center mb-2" /></Link>
+        <p className="text-[9px] font-bold uppercase tracking-[0.4em] text-zinc-700">
+          © 2026 INWISE MOVIES
         </p>
       </footer>
     </div>
