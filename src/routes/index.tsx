@@ -109,13 +109,39 @@ function Index() {
     async function fetchTitles() {
       setLoading(true);
       try {
+        let titleIds: string[] | null = null;
+
+        // Genre filter: resolve title IDs via title_genres join
+        if (filter.startsWith('genre_')) {
+          const genreName = filter.replace('genre_', '');
+          const { data: genreRows } = await supabase
+            .from('genres')
+            .select('id')
+            .ilike('name', genreName)
+            .limit(1);
+          const genreId = genreRows?.[0]?.id;
+          if (genreId) {
+            const { data: tgRows } = await supabase
+              .from('title_genres')
+              .select('title_id')
+              .eq('genre_id', genreId);
+            titleIds = tgRows?.map((r: any) => r.title_id) || [];
+          } else {
+            titleIds = [];
+          }
+        }
+
         let q = supabase.from('titles').select('*', { count: 'exact' });
-        if (filter === 'movie') q = q.eq('type', 'movie');
+
+        if (titleIds !== null) {
+          if (titleIds.length === 0) { setTitles([]); setTotalCount(0); setLoading(false); return; }
+          q = q.in('id', titleIds);
+        } else if (filter === 'movie') q = q.eq('type', 'movie');
         else if (filter === 'series') q = q.eq('type', 'series');
         else if (filter === 'anime') q = q.eq('type', 'anime');
         else if (filter === 'top') q = q.order('imdb_rating', { ascending: false });
         else if (filter === '2026') q = q.eq('year', 2026);
-        // Default: year DESC (2026 first), then newest first
+
         if (filter !== 'top') {
           q = q.order('year', { ascending: false });
           q = q.order('created_at', { ascending: false });
@@ -264,40 +290,21 @@ function Index() {
       {!isSearching && (
         <div className="relative w-full overflow-hidden" style={{ height: '100vh', minHeight: '500px', maxHeight: '820px' }}>
 
-          {/* Blurred background — full fill using poster */}
+          {/* Background — poster/backdrop fills full container */}
           {hero && (
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `url(${hero.poster || hero.backdrop || ''})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center top',
-                filter: 'blur(18px) brightness(0.35)',
-                transform: 'scale(1.12)',
-              }}
+            <img
+              src={hero.backdrop || hero.poster || ''}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover object-top"
+              style={{ filter: 'brightness(0.75)' }}
             />
           )}
           {loading && !hero && <div className="absolute inset-0 bg-[#010510]" />}
 
-          {/* Gradients: left→dark, right→dark, bottom→dark */}
+          {/* Overlay: dark left + dark bottom, lighter in center-right */}
           <div className="absolute inset-0 z-[1]" style={{
-            background: 'linear-gradient(to right, #020916 28%, rgba(2,9,22,0.55) 55%, #020916 88%), linear-gradient(to top, #020916 0%, transparent 35%)'
+            background: 'linear-gradient(to right, rgba(2,9,22,0.92) 0%, rgba(2,9,22,0.55) 50%, rgba(2,9,22,0.3) 100%), linear-gradient(to top, #020916 0%, transparent 38%)',
           }} />
-
-          {/* Crisp poster image — right side */}
-          {hero && (
-            <div className="absolute right-[6%] top-[72px] bottom-0 z-[2] flex items-center">
-              <img
-                src={hero.poster || hero.backdrop}
-                alt={cleanTitle(hero?.title || '')}
-                className="h-full max-h-[460px] w-auto object-contain rounded-xl"
-                style={{
-                  filter: 'drop-shadow(-30px 0 60px rgba(2,9,22,0.9))',
-                  maxWidth: '280px',
-                }}
-              />
-            </div>
-          )}
 
           {/* Prev/Next arrows */}
           {!loading && displayTitles.length > 1 && (
@@ -352,8 +359,8 @@ function Index() {
                 </div>
 
                 {/* Title */}
-                <h1 className="font-semibold text-white mb-3 leading-tight text-2xl md:text-4xl"
-                  style={{ textShadow: '0 2px 8px rgba(2,9,22,0.8)' }}>
+                <h1 className="font-semibold text-white mb-3 leading-tight"
+                  style={{ fontSize: '1.9em', textShadow: '0 2px 8px rgba(2,9,22,0.9)', maxWidth: '600px' }}>
                   {cleanTitle(hero.title)}
                 </h1>
 

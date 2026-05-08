@@ -16,6 +16,15 @@ export const Route = createFileRoute("/watch/$slug")({
   component: Watch,
 });
 
+function cleanTitle(t: string): string {
+  if (!t) return t;
+  return t
+    .replace(/\s*(torrent|download|blu-?ray|4k|1080p|720p|legendado|dublado|dual[\s\-]?[áa]udio|hdrip|bdrip|webrip|web-dl|hdtv|remux|hdcam|\bts\b|\bcam\b|nacional)\s*/gi, ' ')
+    .replace(/\s*\(\s*(?:19|20)\d{2}\s*\)\s*$/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 interface TorrentChoice {
   magnet: string;
   label: string;
@@ -141,7 +150,7 @@ function Watch() {
               {/* Header */}
               <div className="flex items-start justify-between mb-6">
                 <div>
-                  <h3 className="font-black text-lg uppercase tracking-tight text-white italic">{title.title}</h3>
+                  <h3 className="font-black text-lg uppercase tracking-tight text-white italic">{cleanTitle(title.title)}</h3>
                   <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mt-1">{choiceModal.label}</p>
                 </div>
                 <button onClick={() => setChoiceModal(null)} className="text-zinc-600 hover:text-white transition-colors ml-4 mt-0.5">
@@ -201,7 +210,7 @@ function Watch() {
           >
             <div className="flex justify-between items-center mb-4">
               <div>
-                <h2 className="text-lg font-black uppercase tracking-wide italic text-[#00d4ff]">{title.title}</h2>
+                <h2 className="text-lg font-black uppercase tracking-wide italic text-[#00d4ff]">{cleanTitle(title.title)}</h2>
                 {selectedTorrentLabel && (
                   <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">{selectedTorrentLabel}</p>
                 )}
@@ -211,7 +220,7 @@ function Watch() {
               </Button>
             </div>
             <div className="flex-1 w-full max-w-5xl mx-auto rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
-              <TorrentPlayer magnet={selectedTorrent} title={title.title} poster={title.backdrop || title.poster} />
+              <TorrentPlayer magnet={selectedTorrent} title={cleanTitle(title.title)} poster={title.backdrop || title.poster} />
             </div>
           </motion.div>
         )}
@@ -227,7 +236,7 @@ function Watch() {
           transition={{ duration: 1.2 }}
           src={title.backdrop || title.poster}
           className="w-full h-full object-cover"
-          alt={title.title}
+          alt={cleanTitle(title.title)}
         />
 
         {/* Top bar */}
@@ -259,7 +268,7 @@ function Watch() {
           </div>
 
           <h1 className="text-4xl lg:text-6xl font-black mb-3 tracking-tighter uppercase italic text-[#00d4ff] leading-none drop-shadow-2xl">
-            {title.title}
+            {cleanTitle(title.title)}
           </h1>
           {title.synopsis && (
             <p className="text-sm text-zinc-300 line-clamp-2 max-w-lg leading-relaxed">
