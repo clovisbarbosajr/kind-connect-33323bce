@@ -1,6 +1,4 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-// @ts-ignore
-import WebTorrent from 'webtorrent/dist/webtorrent.min.js';
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   Activity, Loader2, FastForward, Rewind, Subtitles, SubtitlesIcon,
@@ -63,7 +61,15 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
     setStatus('loading');
     setStatusMsg('Conectando ao enxame de peers...');
 
-    const client = new WebTorrent();
+    let destroyed = false;
+    let client: any = null;
+
+    // Dynamic import keeps webtorrent out of the SSR bundle entirely
+    // @ts-ignore
+    import('webtorrent/dist/webtorrent.min.js').then((mod: any) => {
+      if (destroyed) return;
+      const WebTorrent = mod.default ?? mod;
+      client = new WebTorrent();
 
     client.on('error', (err: any) => {
       setError(String(err?.message || err));
@@ -121,8 +127,15 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
 
       return () => clearInterval(iv);
     });
+    }).catch((err: any) => {
+      setError('Falha ao carregar o player: ' + String(err?.message || err));
+      setStatus('error');
+    });
 
-    return () => { client.destroy(); };
+    return () => {
+      destroyed = true;
+      if (client) client.destroy();
+    };
   }, [magnet]);
 
   // ── Video events ──────────────────────────────────────────────────
