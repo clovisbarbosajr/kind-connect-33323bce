@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Star, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Star, ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { InwiseLogo } from "@/components/InwiseLogo";
 import {
   DropdownMenu,
@@ -39,7 +39,7 @@ const GENRES = ['Ação', 'Animação', 'Comédia', 'Documentário', 'Drama', 'F
 
 function CatalogCard({ item }: { item: any }) {
   return (
-    <div className="box-border font-[1em] w-[calc(100%/2)] sm:w-[calc(100%/3)] md:w-[calc(100%/5)] lg:w-[calc(100%/7)] mb-4 px-[5px]">
+    <div className="box-border w-[calc(100%/2)] sm:w-[calc(100%/3)] md:w-[calc(100%/5)] lg:w-[calc(100%/7)] mb-4 px-[5px]">
       <div className="relative overflow-hidden rounded-[15px] p-[3%] bg-[#0e1723]">
         <Link to="/watch/$slug" params={{ slug: item.slug }} title={cleanTitle(item.title)}>
           <div className="relative rounded-[8px] overflow-hidden" style={{ paddingTop: '150%' }}>
@@ -59,21 +59,19 @@ function CatalogCard({ item }: { item: any }) {
         </Link>
         <h3 className="mt-2">
           <Link to="/watch/$slug" params={{ slug: item.slug }}
-            className="block text-[#efe9e9] text-[0.85em] leading-tight truncate hover:text-white transition-colors"
-            style={{ fontFamily: '"Segoe UI", "Helvetica Neue", Arial, sans-serif' }}>
+            className="block text-[#efe9e9] text-[0.85em] leading-tight truncate hover:text-white transition-colors">
             {cleanTitle(item.title)}
           </Link>
         </h3>
         <div className="flex items-center gap-1 mt-1 flex-wrap">
           {item.year && (
             <span className="inline-block font-medium uppercase rounded px-[5px] leading-none py-[5px] text-[0.75em] text-white"
-              style={{ backgroundImage: 'linear-gradient(to bottom, #00b4d8, #0077b6)', fontFamily: 'Roobert,Arial,Helvetica,sans-serif', textShadow: '0 0 5px rgba(0,180,216,0.6)', filter: 'drop-shadow(0px 0px 6px #0e1723f5)' }}>
+              style={{ backgroundImage: 'linear-gradient(to bottom, #00b4d8, #0077b6)' }}>
               {item.year}
             </span>
           )}
-          <span className="inline-block text-white/65 border border-white/35 rounded px-[5px] leading-none py-[5px] text-[0.72em] uppercase"
-            style={{ fontFamily: 'Roobert,Arial,Helvetica,sans-serif' }}>
-            {item.type === 'series' || item.type === 'anime' ? 'Dual Áudio' : 'Dual Áudio'}
+          <span className="inline-block text-white/65 border border-white/35 rounded px-[5px] leading-none py-[5px] text-[0.72em] uppercase">
+            Dual Áudio
           </span>
         </div>
       </div>
@@ -88,19 +86,20 @@ function Index() {
   const [heroIndex, setHeroIndex] = useState(0);
   const [scrolled, setScrolled] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
+  const searchDebounce = useRef<ReturnType<typeof setTimeout>>();
   const PAGE_SIZE = 56;
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 80);
+    const handleScroll = () => setScrolled(window.scrollY > 40);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    setPage(0);
-  }, [filter]);
+  useEffect(() => { setPage(0); }, [filter]);
 
   useEffect(() => {
     async function fetchTitles() {
@@ -128,6 +127,28 @@ function Index() {
     fetchTitles();
   }, [filter, page]);
 
+  // Search: debounced Supabase ilike query
+  useEffect(() => {
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    if (searchQuery.length < 2) { setSearchResults([]); return; }
+    searchDebounce.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const { data } = await supabase
+          .from('titles')
+          .select('*')
+          .ilike('title', `%${searchQuery}%`)
+          .limit(80);
+        setSearchResults(data || []);
+      } catch (e) {
+        console.error('[Search] error:', e);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 350);
+    return () => clearTimeout(searchDebounce.current);
+  }, [searchQuery]);
+
   const displayTitles = (titles.length > 0 || loading) ? titles : MOCK_TITLES;
 
   useEffect(() => {
@@ -141,45 +162,46 @@ function Index() {
 
   const hero = displayTitles[heroIndex] || (loading ? null : MOCK_TITLES[0]);
   const heroCount = Math.min(displayTitles.length, 8);
-
-  const searchResults = searchQuery.length > 1
-    ? displayTitles.filter(t => cleanTitle(t.title || '')?.toLowerCase().includes(searchQuery.toLowerCase()))
-    : [];
-
-  const catalogTitles = searchQuery.length > 1 ? searchResults : displayTitles;
+  const isSearching = searchQuery.length >= 2;
+  const catalogTitles = isSearching ? searchResults : displayTitles;
 
   const navBase = "text-[13px] font-semibold uppercase tracking-[0.05em] transition-colors duration-150 hover:text-white whitespace-nowrap";
   const navActive = `${navBase} text-[#00d4ff]`;
-  const navInactive = `${navBase} text-[#e9ecef]/70`;
+  const navInactive = `${navBase} text-white/70`;
 
   return (
-    <div className="min-h-screen text-white overflow-x-hidden" style={{ backgroundColor: '#020916', fontFamily: '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' }}>
+    <div className="min-h-screen text-white overflow-x-hidden" style={{ backgroundColor: '#020916' }}>
 
       {/* ── HEADER ── */}
-      <header className={`fixed top-0 left-0 right-0 z-[500000] transition-all duration-300 ${scrolled ? 'bg-[#020916]/95 shadow-xl' : 'bg-transparent'}`}>
-        <div className="px-4 lg:px-6" style={{ maxWidth: '100%' }}>
-          <nav className="flex items-center justify-start gap-0 h-[88px] w-full text-[#e9ecef]">
+      <header className={`fixed top-0 left-0 right-0 z-[500000] transition-all duration-300 ${scrolled ? 'bg-[#020916]/95 backdrop-blur-sm shadow-lg' : 'bg-transparent'}`}>
+        {/* Always-visible dark gradient at top so nav text readable over any hero image */}
+        {!scrolled && (
+          <div className="absolute inset-0 pointer-events-none"
+            style={{ background: 'linear-gradient(to bottom, rgba(2,9,22,0.85) 0%, transparent 100%)' }} />
+        )}
+        <div className="relative px-4 lg:px-8">
+          <nav className="flex items-center gap-0 h-[72px] w-full text-white">
             {/* Logo */}
-            <div className="flex items-center mr-6 flex-shrink-0">
+            <div className="flex items-center mr-5 flex-shrink-0">
               <Link to="/" search={{ filter: '' }}>
                 <InwiseLogo size="sm" />
               </Link>
             </div>
 
-            {/* Nav links */}
-            <ul className="hidden lg:flex items-center gap-5 list-none mx-6 flex-1">
-              <li className="flex items-center gap-1.5">
-                <svg height="18px" viewBox="0 0 24 24" width="18px" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" style={{ transform: 'translateY(-1px)', flexShrink: 0 }}>
+            {/* Nav links — visible from sm */}
+            <ul className="hidden sm:flex items-center gap-4 lg:gap-5 list-none mx-4 flex-1 overflow-x-auto no-scrollbar">
+              <li className="flex items-center gap-1 flex-shrink-0">
+                <svg height="16px" viewBox="0 0 24 24" width="16px" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2">
                   <path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10" /><path d="M9 21a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1" /><path d="m3 12 2-2 7-7 7 7 2 2" />
                 </svg>
-                <Link to="/" search={{ filter: '' }} className={!filter && !searchQuery ? navActive : navInactive}>Início</Link>
+                <Link to="/" search={{ filter: '' }} className={!filter && !isSearching ? navActive : navInactive}>Início</Link>
               </li>
-              <li className="flex items-center gap-1.5">
+              <li className="flex-shrink-0">
                 <DropdownMenu>
                   <DropdownMenuTrigger className={`${navInactive} flex items-center gap-1 outline-none`}>
                     Gênero <ChevronDown className="w-3 h-3" />
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="bg-[#0e1723] border-[#1e2a3a] grid grid-cols-2 w-64 p-2">
+                  <DropdownMenuContent className="bg-[#0e1723] border-[#1e2a3a] grid grid-cols-2 w-64 p-2 z-[600000]">
                     {GENRES.map(g => (
                       <DropdownMenuItem key={g} asChild>
                         <Link to="/" search={{ filter: `genre_${g.toLowerCase()}` }}
@@ -191,16 +213,16 @@ function Index() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </li>
-              <li>
+              <li className="flex-shrink-0">
                 <Link to="/" search={{ filter: 'movie' }} className={filter === 'movie' ? navActive : navInactive}>Filmes</Link>
               </li>
-              <li>
+              <li className="flex-shrink-0">
                 <Link to="/" search={{ filter: 'series' }} className={filter === 'series' ? navActive : navInactive}>Séries</Link>
               </li>
-              <li>
+              <li className="flex-shrink-0">
                 <Link to="/" search={{ filter: 'top' }} className={filter === 'top' ? navActive : navInactive}>Top IMDb</Link>
               </li>
-              <li>
+              <li className="flex-shrink-0">
                 <Link to="/" search={{ filter: '2026' }}
                   className={filter === '2026' ? navActive : `${navInactive} text-[#00d4ff]/80`}>
                   Lançamentos 2026
@@ -209,198 +231,199 @@ function Index() {
             </ul>
 
             {/* Search */}
-            <div className="ml-auto relative flex items-center">
+            <div className="ml-auto flex-shrink-0 relative">
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Buscar conteúdo ..."
+                  placeholder="Buscar..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="bg-[#0e1723]/80 border border-[#1e2a3a] rounded-full pl-9 pr-4 py-2 text-[13px] w-52 focus:w-72 transition-all outline-none text-white placeholder:text-[#565c67] focus:border-[#00d4ff]/40"
+                  className="bg-[#0e1723]/80 border border-[#1e2a3a] rounded-full pl-8 pr-8 py-1.5 text-[12px] w-36 sm:w-44 focus:w-56 transition-all outline-none text-white placeholder:text-[#565c67] focus:border-[#00d4ff]/40"
                 />
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#565c67]" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#565c67]" />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2">
+                    <X className="w-3.5 h-3.5 text-[#565c67] hover:text-white" />
+                  </button>
+                )}
               </div>
             </div>
           </nav>
         </div>
       </header>
 
-      {/* ── HERO SLIDER ── */}
-      <div className="relative w-full overflow-hidden" style={{ height: '50em' }}>
-        {/* Background image */}
-        {hero && (
-          <div
-            className="absolute inset-0 transition-all duration-[700ms]"
-            style={{
-              backgroundImage: `url(${hero.backdrop || hero.poster || ''})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center top',
-              backgroundRepeat: 'no-repeat',
-              backgroundColor: '#000',
-            }}
-          />
-        )}
-        {loading && !hero && (
-          <div className="absolute inset-0 bg-[#010510]" />
-        )}
+      {/* ── HERO ── */}
+      {!isSearching && (
+        <div className="relative w-full overflow-hidden" style={{ height: '580px' }}>
 
-        {/* Gradient overlays */}
-        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 10%, #020916 98%), linear-gradient(transparent 40%, #020916)', zIndex: 1 }} />
+          {/* Blurred background — full fill using poster */}
+          {hero && (
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage: `url(${hero.poster || hero.backdrop || ''})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center top',
+                filter: 'blur(18px) brightness(0.35)',
+                transform: 'scale(1.12)',
+              }}
+            />
+          )}
+          {loading && !hero && <div className="absolute inset-0 bg-[#010510]" />}
 
-        {/* Prev/Next arrows */}
-        {!loading && displayTitles.length > 1 && (
-          <>
-            <button
-              onClick={() => setHeroIndex(prev => (prev - 1 + heroCount) % heroCount)}
-              className="absolute left-5 top-[40%] -translate-y-1/2 z-[999] w-[42px] h-[42px] flex items-center justify-center text-[#9197a5] hover:text-[#00b4d8] transition-all hover:scale-110"
-              style={{ filter: 'drop-shadow(0px 0px 3px rgb(37,37,37))' }}
-              aria-label="Anterior"
-            >
-              <ChevronLeft className="w-full h-full" />
-            </button>
-            <button
-              onClick={() => setHeroIndex(prev => (prev + 1) % heroCount)}
-              className="absolute right-5 top-[40%] -translate-y-1/2 z-[999] w-[42px] h-[42px] flex items-center justify-center text-[#9197a5] hover:text-[#00b4d8] transition-all hover:scale-110"
-              style={{ filter: 'drop-shadow(0px 0px 3px rgb(37,37,37))' }}
-              aria-label="Próximo"
-            >
-              <ChevronRight className="w-full h-full" />
-            </button>
-          </>
-        )}
+          {/* Gradients: left→dark, right→dark, bottom→dark */}
+          <div className="absolute inset-0 z-[1]" style={{
+            background: 'linear-gradient(to right, #020916 28%, rgba(2,9,22,0.55) 55%, #020916 88%), linear-gradient(to top, #020916 0%, transparent 35%)'
+          }} />
 
-        {/* Slide dots */}
-        {!loading && displayTitles.length > 1 && (
-          <div className="absolute bottom-[3.5em] left-1/2 -translate-x-1/2 flex gap-2 z-[100]">
-            {displayTitles.slice(0, heroCount).map((_, i) => (
-              <button key={i} onClick={() => setHeroIndex(i)}
-                className={`rounded-full transition-all duration-500 ${heroIndex === i ? 'w-6 h-1.5 bg-[#00d4ff]' : 'w-1.5 h-1.5 bg-white/30 hover:bg-white/60'}`} />
-            ))}
-          </div>
-        )}
-
-        {/* Slide content */}
-        <div className="absolute bottom-[30px] z-[100] px-4 lg:px-6" style={{ maxWidth: '80%' }}>
-          {loading || !hero ? (
-            <div className="space-y-4">
-              <Skeleton className="h-12 w-96 bg-white/10 rounded" />
-              <Skeleton className="h-4 w-48 bg-white/10 rounded" />
-              <Skeleton className="h-16 w-[600px] bg-white/10 rounded" />
-              <div className="flex gap-3">
-                <Skeleton className="h-10 w-32 bg-white/10 rounded-full" />
-                <Skeleton className="h-10 w-28 bg-white/10 rounded-full" />
-              </div>
-            </div>
-          ) : (
-            <div style={{ fontSize: '0.7em', color: '#fff' }}>
-              {/* IMDb + meta badges */}
-              <div className="flex items-center gap-2 mb-3 flex-wrap" style={{ fontSize: '1.1em' }}>
-                {hero.imdb_rating && (
-                  <div className="flex items-center gap-1 font-bold text-yellow-400">
-                    <Star className="w-3.5 h-3.5 fill-current" />
-                    {Number(hero.imdb_rating).toFixed(1)}
-                  </div>
-                )}
-                {hero.year && <span className="text-[#9197a5]">· {hero.year}</span>}
-                {hero.type && (
-                  <span className="text-[#9197a5] capitalize">· {hero.type === 'movie' ? 'Filme' : hero.type === 'series' ? 'Série' : 'Anime'}</span>
-                )}
-                {['4K HDR', '1080p', 'Dual Áudio'].map(b => (
-                  <span key={b} className="text-white/60 border border-white/20 rounded px-2 py-0.5 text-[0.85em]">{b}</span>
-                ))}
-              </div>
-
-              {/* Title */}
-              <h1 className="font-medium text-white mb-3 leading-tight"
-                style={{ fontSize: '3.4em', textShadow: '0 1px 4px #020916c9' }}>
-                {cleanTitle(hero.title)}
-              </h1>
-
-              {/* Synopsis */}
-              {hero.synopsis && (
-                <p className="text-[#dee2e6] mb-6 leading-[1.5]"
-                  style={{
-                    fontSize: '1.15em', fontWeight: 300, maxWidth: '650px',
-                    textShadow: '0 1px 10px #020916',
-                    display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden', textOverflow: 'ellipsis'
-                  }}>
-                  {hero.synopsis}
-                </p>
-              )}
-
-              {/* Buttons */}
-              <div className="flex gap-3 flex-wrap">
-                <Link to="/watch/$slug" params={{ slug: hero.slug }}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm transition-all hover:scale-105 hover:brightness-110"
-                  style={{ background: 'linear-gradient(to bottom, #00c8ee, #0090b8)', color: '#fff', boxShadow: '0 0 12px rgba(0,180,216,0.4)' }}>
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                  Assistir
-                </Link>
-                <Link to="/watch/$slug" params={{ slug: hero.slug }}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm border text-white transition-all hover:bg-white/10"
-                  style={{ border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(4px)' }}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                  Download
-                </Link>
-              </div>
+          {/* Crisp poster image — right side */}
+          {hero && (
+            <div className="absolute right-[6%] top-[72px] bottom-0 z-[2] flex items-center">
+              <img
+                src={hero.poster || hero.backdrop}
+                alt={cleanTitle(hero?.title || '')}
+                className="h-full max-h-[460px] w-auto object-contain rounded-xl"
+                style={{
+                  filter: 'drop-shadow(-30px 0 60px rgba(2,9,22,0.9))',
+                  maxWidth: '280px',
+                }}
+              />
             </div>
           )}
-        </div>
-      </div>
 
-      {/* ── SEO TEXT (like starckfilmes) ── */}
-      <div className="px-4 lg:px-6 py-3 text-center">
-        <p className="text-[#9197a5] text-[0.8em] leading-relaxed max-w-4xl mx-auto">
-          INWISE Movies — Filmes e séries em alta qualidade. 4K HDR, BluRay 1080p, 720p. O melhor catálogo com conteúdo constantemente atualizado para garantir que você esteja sempre à frente dos últimos lançamentos. Descubra a qualidade e a conveniência.
-        </p>
-      </div>
+          {/* Prev/Next arrows */}
+          {!loading && displayTitles.length > 1 && (
+            <>
+              <button onClick={() => setHeroIndex(prev => (prev - 1 + heroCount) % heroCount)}
+                className="absolute left-3 top-[45%] -translate-y-1/2 z-[10] w-9 h-9 flex items-center justify-center text-white/50 hover:text-[#00d4ff] transition-all"
+                aria-label="Anterior">
+                <ChevronLeft className="w-full h-full" />
+              </button>
+              <button onClick={() => setHeroIndex(prev => (prev + 1) % heroCount)}
+                className="absolute right-3 top-[45%] -translate-y-1/2 z-[10] w-9 h-9 flex items-center justify-center text-white/50 hover:text-[#00d4ff] transition-all"
+                aria-label="Próximo">
+                <ChevronRight className="w-full h-full" />
+              </button>
+            </>
+          )}
 
-      {/* ── CATALOG ── */}
-      <main className="px-4 lg:px-6 pb-20">
-        {/* Heading + filter tabs */}
-        <div className="mb-6" style={{ boxSizing: 'border-box', margin: '1em 0' }}>
-          <div className="flex items-center flex-wrap gap-1 mb-0" style={{ display: 'block' }}>
-            <h2 className="inline-block align-middle font-normal text-white/93 leading-none mr-2.5"
-              style={{ fontSize: '1.6em', fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", opacity: 0.93 }}>
-              {searchQuery.length > 1 ? `Resultados: "${searchQuery}"` : 'Catálogo'}
-            </h2>
-            {searchQuery.length < 2 && (
-              <>
-                <Link to="/" search={{ filter: '' }}
-                  className={`inline-flex items-center justify-center rounded h-[2.15em] px-4 mx-[5px] text-[0.75em] font-[inherit] transition-all duration-200 cursor-pointer ${!filter ? 'text-white' : 'text-[#abb3ba] bg-[#212529] hover:text-white'}`}
-                  style={!filter ? { background: 'linear-gradient(to bottom, #00c8ee, #0090b8)', filter: 'drop-shadow(0px 0px 8px rgba(255,255,255,0.3))' } : {}}>
-                  Todos
-                </Link>
-                <Link to="/" search={{ filter: 'movie' }}
-                  className={`inline-flex items-center justify-center rounded h-[2.15em] px-4 mx-[5px] text-[0.75em] font-[inherit] transition-all duration-200 cursor-pointer ${filter === 'movie' ? 'text-white' : 'text-[#abb3ba] bg-[#212529] hover:text-white'}`}
-                  style={filter === 'movie' ? { background: 'linear-gradient(to bottom, #00c8ee, #0090b8)', filter: 'drop-shadow(0px 0px 8px rgba(255,255,255,0.3))' } : {}}>
-                  Filmes
-                </Link>
-                <Link to="/" search={{ filter: 'series' }}
-                  className={`inline-flex items-center justify-center rounded h-[2.15em] px-4 mx-[5px] text-[0.75em] font-[inherit] transition-all duration-200 cursor-pointer ${filter === 'series' ? 'text-white' : 'text-[#abb3ba] bg-[#212529] hover:text-white'}`}
-                  style={filter === 'series' ? { background: 'linear-gradient(to bottom, #00c8ee, #0090b8)', filter: 'drop-shadow(0px 0px 8px rgba(255,255,255,0.3))' } : {}}>
-                  Séries
-                </Link>
-                <Link to="/" search={{ filter: 'anime' }}
-                  className={`inline-flex items-center justify-center rounded h-[2.15em] px-4 mx-[5px] text-[0.75em] font-[inherit] transition-all duration-200 cursor-pointer ${filter === 'anime' ? 'text-white' : 'text-[#abb3ba] bg-[#212529] hover:text-white'}`}
-                  style={filter === 'anime' ? { background: 'linear-gradient(to bottom, #00c8ee, #0090b8)', filter: 'drop-shadow(0px 0px 8px rgba(255,255,255,0.3))' } : {}}>
-                  Animes
-                </Link>
-              </>
+          {/* Slide dots */}
+          {!loading && displayTitles.length > 1 && (
+            <div className="absolute bottom-[3em] left-1/2 -translate-x-1/2 flex gap-1.5 z-[10]">
+              {displayTitles.slice(0, heroCount).map((_, i) => (
+                <button key={i} onClick={() => setHeroIndex(i)}
+                  className={`rounded-full transition-all duration-500 ${heroIndex === i ? 'w-5 h-1 bg-[#00d4ff]' : 'w-1 h-1 bg-white/30 hover:bg-white/60'}`} />
+              ))}
+            </div>
+          )}
+
+          {/* Text content — left */}
+          <div className="absolute z-[5] px-4 lg:px-10" style={{ bottom: '40px', left: 0, maxWidth: '60%' }}>
+            {loading || !hero ? (
+              <div className="space-y-3 pt-20">
+                <Skeleton className="h-10 w-72 bg-white/10 rounded" />
+                <Skeleton className="h-3 w-40 bg-white/10 rounded" />
+                <Skeleton className="h-14 w-[500px] bg-white/10 rounded" />
+                <div className="flex gap-3"><Skeleton className="h-9 w-28 bg-white/10 rounded-full" /><Skeleton className="h-9 w-24 bg-white/10 rounded-full" /></div>
+              </div>
+            ) : (
+              <div>
+                {/* Badges */}
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  {hero.imdb_rating && (
+                    <div className="flex items-center gap-1 font-bold text-yellow-400 text-sm">
+                      <Star className="w-3.5 h-3.5 fill-current" />
+                      {Number(hero.imdb_rating).toFixed(1)}
+                    </div>
+                  )}
+                  {hero.year && <span className="text-white/50 text-sm">· {hero.year}</span>}
+                  {hero.type && <span className="text-white/50 text-sm capitalize">· {hero.type === 'movie' ? 'Filme' : hero.type === 'series' ? 'Série' : 'Anime'}</span>}
+                  {['4K', '1080p', 'Dual Áudio'].map(b => (
+                    <span key={b} className="text-white/55 border border-white/20 rounded px-2 py-0.5 text-[11px]">{b}</span>
+                  ))}
+                </div>
+
+                {/* Title */}
+                <h1 className="font-semibold text-white mb-3 leading-tight text-2xl md:text-4xl"
+                  style={{ textShadow: '0 2px 8px rgba(2,9,22,0.8)' }}>
+                  {cleanTitle(hero.title)}
+                </h1>
+
+                {/* Synopsis */}
+                {hero.synopsis && (
+                  <p className="text-white/65 mb-5 leading-relaxed text-sm max-w-md"
+                    style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {hero.synopsis}
+                  </p>
+                )}
+
+                {/* Buttons */}
+                <div className="flex gap-3 flex-wrap">
+                  <Link to="/watch/$slug" params={{ slug: hero.slug }}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm transition-all hover:scale-105"
+                    style={{ background: 'linear-gradient(to bottom, #00c8ee, #0090b8)', color: '#fff', boxShadow: '0 0 12px rgba(0,180,216,0.35)' }}>
+                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                    Assistir
+                  </Link>
+                  <Link to="/watch/$slug" params={{ slug: hero.slug }}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm border text-white transition-all hover:bg-white/10"
+                    style={{ border: '1px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(4px)' }}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                    Download
+                  </Link>
+                </div>
+              </div>
             )}
           </div>
         </div>
+      )}
+
+      {/* ── SEO ── */}
+      {!isSearching && (
+        <div className="px-4 lg:px-8 py-3 text-center">
+          <p className="text-[#9197a5] text-[0.78em] leading-relaxed max-w-4xl mx-auto">
+            INWISE Movies — Filmes e séries em alta qualidade. 4K HDR, BluRay 1080p, 720p. O melhor catálogo com conteúdo constantemente atualizado.
+          </p>
+        </div>
+      )}
+
+      {/* ── CATALOG ── */}
+      <main className="px-4 lg:px-8 pb-20" style={{ paddingTop: isSearching ? '88px' : '0' }}>
+        {/* Heading + filter tabs */}
+        <div className="mb-4" style={{ margin: '0.8em 0' }}>
+          <h2 className="inline-block align-middle font-normal text-white/90 leading-none mr-3"
+            style={{ fontSize: '1.5em', fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }}>
+            {isSearching
+              ? searchLoading ? 'Buscando...' : `Resultados: "${searchQuery}" (${searchResults.length})`
+              : 'Catálogo'}
+          </h2>
+          {!isSearching && (
+            <>
+              {[
+                { label: 'Todos', val: '' },
+                { label: 'Filmes', val: 'movie' },
+                { label: 'Séries', val: 'series' },
+                { label: 'Animes', val: 'anime' },
+              ].map(({ label, val }) => (
+                <Link key={val} to="/" search={{ filter: val }}
+                  className={`inline-flex items-center justify-center rounded h-[2em] px-4 mx-[4px] text-[0.75em] font-medium transition-all duration-200 cursor-pointer ${filter === val ? 'text-white' : 'text-[#abb3ba] bg-[#212529] hover:text-white'}`}
+                  style={filter === val ? { background: 'linear-gradient(to bottom, #00c8ee, #0090b8)' } : {}}>
+                  {label}
+                </Link>
+              ))}
+            </>
+          )}
+        </div>
 
         {/* Grid */}
-        <div className="flex flex-wrap" style={{ margin: '0 -4px', marginTop: '1.6em', color: '#e9ecef' }}>
-          {loading && titles.length === 0
+        <div className="flex flex-wrap" style={{ margin: '0 -5px', marginTop: '1em' }}>
+          {(loading && titles.length === 0) || (isSearching && searchLoading)
             ? Array.from({ length: 14 }).map((_, i) => (
                 <div key={i} className="w-[calc(100%/2)] sm:w-[calc(100%/3)] md:w-[calc(100%/5)] lg:w-[calc(100%/7)] mb-4 px-[5px]">
                   <div className="rounded-[15px] overflow-hidden p-[3%] bg-[#0e1723]">
-                    <Skeleton className="w-full bg-[#1a2535]" style={{ paddingTop: '150%' }} />
-                    <Skeleton className="h-3 w-3/4 bg-[#1a2535] mt-2 rounded" />
-                    <Skeleton className="h-2 w-1/2 bg-[#1a2535] mt-1 rounded" />
+                    <div className="w-full bg-[#1a2535] rounded-[8px]" style={{ paddingTop: '150%' }} />
+                    <div className="h-3 w-3/4 bg-[#1a2535] mt-2 rounded" />
+                    <div className="h-2 w-1/2 bg-[#1a2535] mt-1 rounded" />
                   </div>
                 </div>
               ))
@@ -408,20 +431,19 @@ function Index() {
             ? catalogTitles.map(item => <CatalogCard key={item.id} item={item} />)
             : (
               <div className="w-full py-20 text-center text-[#565c67] text-sm uppercase tracking-widest font-semibold">
-                Nenhum título encontrado
+                {isSearching ? 'Nenhum resultado encontrado' : 'Nenhum título encontrado'}
               </div>
             )
           }
         </div>
 
         {/* Load More */}
-        {!loading && !searchQuery && catalogTitles.length < totalCount && (
+        {!loading && !isSearching && catalogTitles.length < totalCount && (
           <div className="flex justify-center mt-8">
-            <button
-              onClick={() => setPage(p => p + 1)}
+            <button onClick={() => setPage(p => p + 1)}
               className="px-8 py-3 rounded-full text-sm font-semibold uppercase tracking-wider transition-all hover:scale-105"
               style={{ background: 'linear-gradient(to bottom, #00c8ee, #0090b8)', color: '#fff' }}>
-              Carregar Mais
+              Carregar Mais ({totalCount - catalogTitles.length} restantes)
             </button>
           </div>
         )}
@@ -434,43 +456,31 @@ function Index() {
       </main>
 
       {/* ── FOOTER ── */}
-      <footer className="border-t px-4 lg:px-6 py-12" style={{ borderColor: '#0e1723', backgroundColor: '#020916' }}>
-        <div className="flex flex-col md:flex-row justify-between gap-10 mb-10">
+      <footer className="border-t px-4 lg:px-8 py-10" style={{ borderColor: '#0e1723', backgroundColor: '#020916' }}>
+        <div className="flex flex-col md:flex-row justify-between gap-8 mb-8">
           <div>
-            <InwiseLogo size="md" className="mb-4" />
+            <InwiseLogo size="md" className="mb-3" />
             <p className="text-[#565c67] text-sm leading-relaxed max-w-xs">O melhor catálogo com qualidade 4K, Dual Áudio e legendas PT-BR.</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-8 text-sm">
             <div>
               <h4 className="font-semibold uppercase tracking-widest text-[10px] mb-4 text-[#9197a5]">Catálogo</h4>
-              <ul className="space-y-2.5 text-[#565c67]">
+              <ul className="space-y-2 text-[#565c67]">
                 <li><Link to="/" search={{ filter: 'movie' }} className="hover:text-[#00d4ff] transition-colors">Filmes</Link></li>
                 <li><Link to="/" search={{ filter: 'series' }} className="hover:text-[#00d4ff] transition-colors">Séries</Link></li>
                 <li><Link to="/" search={{ filter: 'anime' }} className="hover:text-[#00d4ff] transition-colors">Animes</Link></li>
-                <li><Link to="/" search={{ filter: '2026' }} className="hover:text-[#00d4ff] transition-colors">Lançamentos 2026</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold uppercase tracking-widest text-[10px] mb-4 text-[#9197a5]">Suporte</h4>
-              <ul className="space-y-2.5 text-[#565c67]">
-                <li><Link to="/" search={{ filter: '' }} className="hover:text-[#00d4ff] transition-colors">FAQ</Link></li>
-                <li><Link to="/" search={{ filter: '' }} className="hover:text-[#00d4ff] transition-colors">DMCA</Link></li>
-                <li><Link to="/" search={{ filter: '' }} className="hover:text-[#00d4ff] transition-colors">Privacidade</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="font-semibold uppercase tracking-widest text-[10px] mb-4 text-[#9197a5]">Admin</h4>
-              <ul className="space-y-2.5 text-[#565c67]">
-                <li><Link to="/admin" className="text-[#00d4ff] hover:text-white transition-colors">Painel Admin</Link></li>
+              <ul className="space-y-2 text-[#565c67]">
+                <li><Link to="/admin" className="text-[#00d4ff] hover:text-white transition-colors">Painel</Link></li>
               </ul>
             </div>
           </div>
         </div>
-        <div className="pt-6 border-t flex flex-col md:flex-row justify-between items-center gap-4" style={{ borderColor: '#0e1723' }}>
-          <p className="text-[9px] font-semibold text-[#565c67] uppercase tracking-[0.3em]">© 2026 INWISE MOVIES. Todos os direitos reservados.</p>
-          <div className="flex gap-6 text-[9px] font-semibold text-[#565c67] uppercase tracking-[0.2em]">
-            <span>Privacidade</span><span>Termos</span><span>Cookies</span>
-          </div>
+        <div className="pt-5 border-t flex justify-between items-center" style={{ borderColor: '#0e1723' }}>
+          <p className="text-[9px] font-semibold text-[#565c67] uppercase tracking-[0.3em]">© 2026 INWISE MOVIES</p>
         </div>
       </footer>
     </div>
