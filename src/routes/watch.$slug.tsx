@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InwiseLogo } from "@/components/InwiseLogo";
-import TorrentPlayer from "@/components/TorrentPlayer";
 
 export const Route = createFileRoute("/watch/$slug")({
   component: Watch,
@@ -37,8 +36,6 @@ function Watch() {
   const [title, setTitle]       = useState<any>(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<any>(null);
-  const [selectedTorrent, setSelectedTorrent]     = useState<string | null>(null);
-  const [selectedTorrentLabel, setSelectedTorrentLabel] = useState("");
   const [openSeasons, setOpenSeasons] = useState<Set<number>>(new Set([1]));
   const [choiceModal, setChoiceModal] = useState<TorrentChoice | null>(null);
 
@@ -87,10 +84,9 @@ function Watch() {
     setChoiceModal({ magnet, label, quality, audio });
   };
 
-  const openPlayer = (magnet: string, label: string) => {
+  const openPlayer = (magnet: string, _label: string) => {
     setChoiceModal(null);
-    setSelectedTorrent(magnet);
-    setSelectedTorrentLabel(label);
+    window.open(`https://instant.io/#${encodeURIComponent(magnet)}`, '_blank');
   };
 
   const downloadTorrent = (magnet: string) => {
@@ -195,33 +191,6 @@ function Watch() {
                 "Assistir" usa WebTorrent no navegador • "Baixar" abre no cliente torrent
               </p>
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Player Modal ── */}
-      <AnimatePresence>
-        {selectedTorrent && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-xl flex flex-col p-4 md:p-6"
-          >
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h2 className="text-lg font-black uppercase tracking-wide italic text-[#00d4ff]">{cleanTitle(title.title)}</h2>
-                {selectedTorrentLabel && (
-                  <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">{selectedTorrentLabel}</p>
-                )}
-              </div>
-              <Button onClick={() => setSelectedTorrent(null)} variant="ghost" className="h-11 w-11 rounded-full bg-zinc-900 border border-zinc-800 text-white hover:bg-zinc-800">
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-            <div className="flex-1 w-full max-w-5xl mx-auto rounded-2xl overflow-hidden border border-white/5 shadow-2xl">
-              <TorrentPlayer magnet={selectedTorrent} title={cleanTitle(title.title)} poster={title.backdrop || title.poster} />
-            </div>
           </motion.div>
         )}
       </AnimatePresence>
