@@ -75,6 +75,9 @@ function Index() {
   const [heroIndex, setHeroIndex] = useState(0);
   const [scrolled, setScrolled] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState<string | null>(null);
+  const [filterGenre, setFilterGenre] = useState<string | null>(null);
+  const [filteredByGenre, setFilteredByGenre] = useState<any[]>([]);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -101,6 +104,27 @@ function Index() {
     fetchTitles();
   }, []);
 
+  useEffect(() => {
+    if (!filterGenre) {
+      setFilteredByGenre([]);
+      return;
+    }
+    async function fetchByGenre() {
+      try {
+        const { data, error } = await supabase
+          .from('titles')
+          .select('*, title_genres!inner(genre_id, genres!inner(name))')
+          .eq('title_genres.genres.name', filterGenre);
+        if (error) throw error;
+        setFilteredByGenre(data || []);
+      } catch (e) {
+        console.error("[Home] Genre Fetch Error:", e);
+        setFilteredByGenre([]);
+      }
+    }
+    fetchByGenre();
+  }, [filterGenre]);
+
   const displayTitles = (titles.length > 0 || loading) ? titles : MOCK_TITLES;
 
   useEffect(() => {
@@ -118,52 +142,93 @@ function Index() {
   const animes   = displayTitles.filter(t => t.type === 'anime');
   const topRated = [...displayTitles].sort((a, b) => (Number(b.imdb_rating) || 0) - (Number(a.imdb_rating) || 0));
 
+  const searchResults = searchQuery.length > 1
+    ? displayTitles.filter(t => t.title?.toLowerCase().includes(searchQuery.toLowerCase()))
+    : [];
+
+  const filteredTitles = filterType === 'top'
+    ? topRated
+    : filterType
+      ? displayTitles.filter(t => t.type === filterType)
+      : displayTitles;
+
+  const navLinkClass = (type: string | null) =>
+    filterType === type && !searchQuery
+      ? "text-[#00d4ff] border-b border-[#00d4ff] transition-colors"
+      : "hover:text-white transition-colors";
+
   return (
     <div className="min-h-screen bg-black text-white selection:bg-primary selection:text-black no-scrollbar overflow-x-hidden">
-      {/* Navbar */}
       <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 px-6 lg:px-12 py-4 flex items-center justify-between ${scrolled ? 'bg-black shadow-2xl' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
         <div className="flex items-center gap-10">
-          <Link to="/"><InwiseLogo size="md" /></Link>
+          <Link to="/" onClick={() => { setFilterType(null); setFilterGenre(null); setSearchQuery(""); }}>
+            <InwiseLogo size="md" />
+          </Link>
           <div className="hidden lg:flex items-center gap-6 text-xs font-black uppercase tracking-widest text-zinc-300">
-            <Link to="/" className="text-white hover:text-primary transition-colors">INÍCIO</Link>
+            <button
+              onClick={() => { setFilterType(null); setFilterGenre(null); setSearchQuery(""); }}
+              className={navLinkClass(null)}
+            >
+              INÍCIO
+            </button>
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-1 hover:text-white outline-none uppercase">
                 Gêneros <ChevronDown className="w-3 h-3" />
               </DropdownMenuTrigger>
               <DropdownMenuContent className="bg-zinc-950/95 border-zinc-800 grid grid-cols-2 w-64 p-2 backdrop-blur-xl">
                 {GENRES.map(g => (
-                  <DropdownMenuItem key={g} className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-primary hover:bg-zinc-900 focus:bg-zinc-900 cursor-pointer">{g}</DropdownMenuItem>
+                  <DropdownMenuItem
+                    key={g}
+                    onClick={() => { setFilterType(null); setFilterGenre(g); setSearchQuery(""); }}
+                    className={`text-[10px] font-bold uppercase tracking-wider hover:bg-zinc-900 focus:bg-zinc-900 cursor-pointer ${filterGenre === g ? 'text-[#00d4ff]' : 'text-zinc-400 hover:text-primary'}`}
+                  >
+                    {g}
+                  </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1 hover:text-white outline-none uppercase">
-                Áudio <ChevronDown className="w-3 h-3" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-zinc-950/95 border-zinc-800 w-40 p-2 backdrop-blur-xl">
-                {['Dublado', 'Legendado', 'Dual Áudio'].map(a => (
-                  <DropdownMenuItem key={a} className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-primary cursor-pointer">{a}</DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Link to="/" className="hover:text-white transition-colors">FILMES</Link>
-            <Link to="/" className="hover:text-white transition-colors">SÉRIES</Link>
-            <Link to="/" className="hover:text-white transition-colors">ANIMES</Link>
-            <Link to="/" className="hover:text-white transition-colors">TOP IMDB</Link>
+            <button
+              onClick={() => { setFilterType('movie'); setFilterGenre(null); setSearchQuery(""); }}
+              className={navLinkClass('movie')}
+            >
+              FILMES
+            </button>
+            <button
+              onClick={() => { setFilterType('series'); setFilterGenre(null); setSearchQuery(""); }}
+              className={navLinkClass('series')}
+            >
+              SÉRIES
+            </button>
+            <button
+              onClick={() => { setFilterType('anime'); setFilterGenre(null); setSearchQuery(""); }}
+              className={navLinkClass('anime')}
+            >
+              ANIMES
+            </button>
+            <button
+              onClick={() => { setFilterType('top'); setFilterGenre(null); setSearchQuery(""); }}
+              className={navLinkClass('top')}
+            >
+              TOP IMDB
+            </button>
             <Link to="/" className="text-[#00d4ff] drop-shadow-[0_0_10px_rgba(0,212,255,0.3)]">LANÇAMENTOS 2026</Link>
           </div>
         </div>
         <div className="flex items-center gap-5">
           <div className="relative group hidden sm:block">
-            <input type="text" placeholder="Buscar filmes, séries..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-zinc-900/60 border border-zinc-800/60 rounded-full pl-10 pr-4 py-2 text-[10px] font-bold uppercase tracking-widest w-48 focus:w-72 transition-all focus:border-primary/50 outline-none text-white placeholder:text-zinc-600" />
+            <input
+              type="text"
+              placeholder="Buscar filmes, séries..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); if (e.target.value.length > 0) { setFilterType(null); setFilterGenre(null); } }}
+              className="bg-zinc-900/60 border border-zinc-800/60 rounded-full pl-10 pr-4 py-2 text-[10px] font-bold uppercase tracking-widest w-48 focus:w-72 transition-all focus:border-primary/50 outline-none text-white placeholder:text-zinc-600"
+            />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-primary transition-colors" />
           </div>
         </div>
       </nav>
 
-      {/* Hero */}
-      <header className="relative h-[85vh] md:h-screen w-full overflow-hidden">
+      <header className="group relative h-[85vh] md:h-screen w-full overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div key={hero?.id || 'skeleton'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 1.5 }} className="absolute inset-0">
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10" />
@@ -208,6 +273,9 @@ function Index() {
                 <Button asChild className="h-12 px-8 rounded-full bg-[#00d4ff] text-black font-black text-base hover:scale-105 hover:bg-white transition-all border-none">
                   <Link to="/watch/$slug" params={{ slug: hero.slug }}><Play className="w-4 h-4 mr-2 fill-current" /> Assistir Agora</Link>
                 </Button>
+                <Button asChild className="h-12 px-8 rounded-full bg-zinc-900/60 backdrop-blur-xl border border-white/10 text-white font-black text-base hover:bg-zinc-800">
+                  <Link to="/watch/$slug" params={{ slug: hero.slug }}>↓ Baixar</Link>
+                </Button>
                 <Button className="h-12 px-8 rounded-full bg-zinc-900/60 backdrop-blur-xl border border-white/10 text-white font-black text-base hover:bg-zinc-800 italic">
                   <Plus className="w-4 h-4 mr-2" /> Minha Lista
                 </Button>
@@ -225,35 +293,42 @@ function Index() {
           </div>
         )}
 
-        {/* Hero carousel arrows */}
         {!loading && displayTitles.length > 1 && (
           <>
             <button
               onClick={() => setHeroIndex(prev => (prev - 1 + Math.min(displayTitles.length, 6)) % Math.min(displayTitles.length, 6))}
-              className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white hover:bg-black/80 hover:border-primary/50 transition-all"
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/30 border border-white/10 flex items-center justify-center text-white hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100"
             >
-              <ChevronLeft className="w-6 h-6" />
+              <ChevronLeft className="w-5 h-5" />
             </button>
             <button
               onClick={() => setHeroIndex(prev => (prev + 1) % Math.min(displayTitles.length, 6))}
-              className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 flex items-center justify-center text-white hover:bg-black/80 hover:border-primary/50 transition-all"
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/30 border border-white/10 flex items-center justify-center text-white hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100"
             >
-              <ChevronRight className="w-6 h-6" />
+              <ChevronRight className="w-5 h-5" />
             </button>
           </>
         )}
       </header>
 
-      {/* Content Rows */}
       <main className="relative z-20 -mt-28 pb-32">
-        <TitleRow title="Lançamentos Recentes" items={displayTitles.slice(0, 20)} loading={loading} />
-        <TitleRow title="Top IMDb" items={topRated.slice(0, 20)} loading={loading} />
-
-{movies.length > 0 && <TitleRow title="Filmes em Destaque" items={movies.slice(0, 20)} loading={false} />}
-        {series.length > 0 && <TitleRow title="Séries de Sucesso" items={series.slice(0, 20)} loading={false} />}
-        {animes.length > 0  && <TitleRow title="Animes & Animações"  items={animes.slice(0, 20)}  loading={false} />}
-        {movies.length === 0 && series.length === 0 && !loading && (
-          <TitleRow title="Todo o Catálogo" items={displayTitles.slice(0, 20)} loading={false} />
+        {searchQuery.length > 1 ? (
+          <TitleRow title={`Resultados para "${searchQuery}"`} items={searchResults} loading={false} />
+        ) : filterGenre ? (
+          <TitleRow title={`Gênero: ${filterGenre}`} items={filteredByGenre.length > 0 ? filteredByGenre : displayTitles} loading={filteredByGenre.length === 0 && loading} />
+        ) : filterType ? (
+          <TitleRow title="Resultados" items={filteredTitles} loading={loading} />
+        ) : (
+          <>
+            <TitleRow title="Lançamentos Recentes" items={displayTitles.slice(0, 20)} loading={loading} />
+            <TitleRow title="Top IMDb" items={topRated.slice(0, 20)} loading={loading} />
+            {movies.length > 0 && <TitleRow title="Filmes em Destaque" items={movies.slice(0, 20)} loading={false} />}
+            {series.length > 0 && <TitleRow title="Séries de Sucesso" items={series.slice(0, 20)} loading={false} />}
+            {animes.length > 0 && <TitleRow title="Animes & Animações" items={animes.slice(0, 20)} loading={false} />}
+            {movies.length === 0 && series.length === 0 && !loading && (
+              <TitleRow title="Todo o Catálogo" items={displayTitles.slice(0, 20)} loading={false} />
+            )}
+          </>
         )}
       </main>
 
@@ -266,9 +341,9 @@ function Index() {
           <div>
             <h4 className="font-black uppercase tracking-[0.3em] text-[10px] mb-5 text-zinc-300">Catálogo</h4>
             <ul className="space-y-3 text-[11px] font-black uppercase tracking-widest text-zinc-500">
-              <li><Link to="/" className="hover:text-primary transition-colors">Filmes</Link></li>
-              <li><Link to="/" className="hover:text-primary transition-colors">Séries</Link></li>
-              <li><Link to="/" className="hover:text-primary transition-colors">Animes</Link></li>
+              <li><button onClick={() => { setFilterType('movie'); setFilterGenre(null); }} className="hover:text-primary transition-colors">Filmes</button></li>
+              <li><button onClick={() => { setFilterType('series'); setFilterGenre(null); }} className="hover:text-primary transition-colors">Séries</button></li>
+              <li><button onClick={() => { setFilterType('anime'); setFilterGenre(null); }} className="hover:text-primary transition-colors">Animes</button></li>
               <li><Link to="/" className="hover:text-primary transition-colors">Lançamentos 2026</Link></li>
             </ul>
           </div>

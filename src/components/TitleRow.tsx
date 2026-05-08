@@ -47,9 +47,9 @@ export function TitleRow({ title, items, loading }: TitleRowProps) {
         {showLeftArrow && (
           <button
             onClick={() => scroll('left')}
-            className="absolute left-0 top-0 bottom-0 z-40 bg-black/60 w-12 hidden md:flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity backdrop-blur-sm"
+            className="absolute left-0 top-0 bottom-0 z-40 bg-black/60 w-8 hidden md:flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity backdrop-blur-sm"
           >
-            <ChevronLeft className="w-8 h-8 text-white" />
+            <ChevronLeft className="w-5 h-5 text-white" />
           </button>
         )}
 
@@ -60,7 +60,7 @@ export function TitleRow({ title, items, loading }: TitleRowProps) {
         >
           {loading ? (
             Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="min-w-[130px] md:min-w-[170px] aspect-[2/3] rounded-xl bg-zinc-900 animate-pulse" />
+              <Skeleton key={i} className="min-w-[115px] md:min-w-[150px] aspect-[2/3] rounded-xl bg-zinc-900 animate-pulse" />
             ))
           ) : items.length > 0 ? (
             items.map((item) => (
@@ -68,7 +68,8 @@ export function TitleRow({ title, items, loading }: TitleRowProps) {
                 key={item.id}
                 to="/watch/$slug"
                 params={{ slug: item.slug }}
-                className="min-w-[130px] md:min-w-[170px] group/card relative flex-shrink-0"
+                title={item.title}
+                className="min-w-[115px] md:min-w-[150px] group/card relative flex-shrink-0"
               >
                 <motion.div
                   whileHover={{ scale: 1.05, zIndex: 10 }}
@@ -83,36 +84,22 @@ export function TitleRow({ title, items, loading }: TitleRowProps) {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80" />
 
-                  {/* Quality badges */}
                   <div className="absolute top-2 right-2 flex flex-col gap-1 items-end opacity-0 group-hover/card:opacity-100 transition-opacity">
                     <Badge className="bg-primary text-black text-[8px] font-black border-none px-1 h-4">4K</Badge>
                     <Badge className="bg-zinc-950/90 text-white text-[8px] font-black border-none px-1 h-4">DUAL</Badge>
                   </div>
 
-                  {/* IMDb */}
                   <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded flex items-center gap-1 border border-white/10">
                     <Star className="w-2.5 h-2.5 text-yellow-400 fill-current" />
                     <span className="text-[9px] font-black">{item.imdb_rating ? Number(item.imdb_rating).toFixed(1) : '?'}</span>
                   </div>
 
-                  {/* Play overlay */}
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center">
                     <div className="w-10 h-10 bg-[#00d4ff] rounded-full flex items-center justify-center text-black shadow-[0_0_15px_rgba(0,212,255,0.5)]">
                       <Play className="w-5 h-5 fill-current ml-0.5" />
                     </div>
                   </div>
                 </motion.div>
-
-                <div className="mt-2.5 px-1">
-                  <h3 className="font-bold text-[11px] md:text-[12px] truncate group-hover:text-primary transition-colors uppercase tracking-tight">{item.title}</h3>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[9px] text-zinc-500 font-black uppercase">{item.year || '—'}</span>
-                    <span className="text-[9px] text-zinc-700">•</span>
-                    <span className="text-[9px] text-zinc-500 font-black uppercase">
-                      {item.type === 'movie' ? 'Filme' : item.type === 'anime' ? 'Anime' : 'Série'}
-                    </span>
-                  </div>
-                </div>
               </Link>
             ))
           ) : (
@@ -125,9 +112,9 @@ export function TitleRow({ title, items, loading }: TitleRowProps) {
         {showRightArrow && !loading && items.length > 0 && (
           <button
             onClick={() => scroll('right')}
-            className="absolute right-0 top-0 bottom-0 z-40 bg-black/60 w-12 hidden md:flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity backdrop-blur-sm"
+            className="absolute right-0 top-0 bottom-0 z-40 bg-black/60 w-8 hidden md:flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity backdrop-blur-sm"
           >
-            <ChevronRight className="w-8 h-8 text-white" />
+            <ChevronRight className="w-5 h-5 text-white" />
           </button>
         )}
       </div>

@@ -37,17 +37,13 @@ logging.basicConfig(
 )
 log = logging.getLogger("inwise.update")
 
-# How many pages to scan for new titles per section (keep small for daily runs)
+# Daily schedule: only scan the most recent pages (2026 + homepage)
+# Full historical sync is done once via full_sync.py; fill_gaps.py fixes missing data
 NEW_TITLE_PAGES = 3
 
-# Sections to check for newly added titles
 NEW_TITLE_SECTIONS = [
-    f"{REAL_SITE}/",
     f"{REAL_SITE}/?year=2026",
-    f"{REAL_SITE}/?year=2025",
-    f"{REAL_SITE}/filmes/",
-    f"{REAL_SITE}/series/",
-    f"{REAL_SITE}/animes/",
+    f"{REAL_SITE}/",
 ]
 
 
