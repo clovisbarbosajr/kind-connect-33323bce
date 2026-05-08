@@ -34,7 +34,7 @@ const TorrentPlayer: React.FC<TorrentPlayerProps> = ({ magnet, title, poster }) 
   const videoRef   = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef   = useRef<HTMLTrackElement>(null);
-  const hideTimer  = useRef<ReturnType<typeof setTimeout>>();
+  const hideTimer  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [status, setStatus]           = useState<'loading' | 'buffering' | 'streaming' | 'error'>('loading');
   const [stats, setStats]             = useState({ speed: 0, peers: 0, progress: 0 });
