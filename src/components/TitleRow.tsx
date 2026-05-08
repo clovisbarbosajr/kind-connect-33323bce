@@ -5,6 +5,15 @@ import { Play, Star, ChevronLeft, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 
+function cleanTitle(t: string): string {
+  if (!t) return t;
+  return t
+    .replace(/\s*(torrent|download|blu-?ray|4k|1080p|720p|legendado|dublado|dual[\s\-]?[áa]udio|hdrip|bdrip|webrip|web-dl|hdtv|remux|hdcam|\bts\b|\bcam\b|nacional)\s*/gi, ' ')
+    .replace(/\s*\(\s*(?:19|20)\d{2}\s*\)\s*$/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 interface TitleRowProps {
   title: string;
   items: any[];
@@ -34,7 +43,7 @@ export function TitleRow({ title, items, loading }: TitleRowProps) {
   return (
     <div className="space-y-4 mb-10 relative group/row">
       <div className="flex items-center justify-between px-6 lg:px-12">
-        <h2 className="text-lg md:text-xl font-black tracking-tighter uppercase italic text-white flex items-center gap-2.5">
+        <h2 className="text-lg md:text-xl font-black tracking-tighter uppercase text-white flex items-center gap-2.5">
           <span className="w-1 h-5 bg-[#00d4ff] rounded-full" />
           {title}
         </h2>
@@ -68,7 +77,7 @@ export function TitleRow({ title, items, loading }: TitleRowProps) {
                 key={item.id}
                 to="/watch/$slug"
                 params={{ slug: item.slug }}
-                title={item.title}
+                title={cleanTitle(item.title)}
                 className="min-w-[115px] md:min-w-[150px] group/card relative flex-shrink-0"
               >
                 <motion.div

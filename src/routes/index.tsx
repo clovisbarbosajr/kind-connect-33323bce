@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Search, Star, Plus, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Play, Search, Star, ChevronDown, ChevronLeft, ChevronRight, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TitleRow } from "@/components/TitleRow";
@@ -15,7 +15,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+function cleanTitle(t: string): string {
+  if (!t) return t;
+  return t
+    .replace(/\s*(torrent|download|blu-?ray|4k|1080p|720p|legendado|dublado|dual[\s\-]?[áa]udio|hdrip|bdrip|webrip|web-dl|hdtv|remux|hdcam|\bts\b|\bcam\b|nacional)\s*/gi, ' ')
+    .replace(/\s*\(\s*(?:19|20)\d{2}\s*\)\s*$/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export const Route = createFileRoute("/")({
+  validateSearch: (s) => ({ filter: (s.filter as string) || '' }),
   component: Index,
 });
 
@@ -70,12 +80,12 @@ const MOCK_TITLES: any[] = [
 const GENRES = ['Ação', 'Animação', 'Comédia', 'Documentário', 'Drama', 'Ficção Científica', 'Guerra', 'Musical', 'Mistério', 'Policial', 'Romance', 'Terror', 'Western', 'Biografia'];
 
 function Index() {
+  const { filter } = Route.useSearch();
   const [titles, setTitles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [heroIndex, setHeroIndex] = useState(0);
   const [scrolled, setScrolled] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<string | null>(null);
   const [filterGenre, setFilterGenre] = useState<string | null>(null);
   const [filteredByGenre, setFilteredByGenre] = useState<any[]>([]);
 
@@ -143,43 +153,48 @@ function Index() {
   const topRated = [...displayTitles].sort((a, b) => (Number(b.imdb_rating) || 0) - (Number(a.imdb_rating) || 0));
 
   const searchResults = searchQuery.length > 1
-    ? displayTitles.filter(t => t.title?.toLowerCase().includes(searchQuery.toLowerCase()))
+    ? displayTitles.filter(t => cleanTitle(t.title || '')?.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
 
-  const filteredTitles = filterType === 'top'
-    ? topRated
-    : filterType
-      ? displayTitles.filter(t => t.type === filterType)
-      : displayTitles;
+  const getFilteredTitles = () => {
+    if (filter === 'movie') return displayTitles.filter(t => t.type === 'movie');
+    if (filter === 'series') return displayTitles.filter(t => t.type === 'series');
+    if (filter === 'anime') return displayTitles.filter(t => t.type === 'anime');
+    if (filter === 'top') return topRated;
+    if (filter === '2026') return displayTitles.filter(t => t.year === 2026 || t.year === '2026');
+    return displayTitles;
+  };
 
-  const navLinkClass = (type: string | null) =>
-    filterType === type && !searchQuery
-      ? "text-[#00d4ff] border-b border-[#00d4ff] transition-colors"
-      : "hover:text-white transition-colors";
+  const filteredTitles = getFilteredTitles();
+
+  const navLinkBase = "transition-colors text-[11px] font-black uppercase tracking-widest";
+  const navActive = `${navLinkBase} text-[#00d4ff] border-b border-[#00d4ff]`;
+  const navInactive = `${navLinkBase} text-zinc-300 hover:text-white`;
 
   return (
     <div className="min-h-screen bg-black text-white selection:bg-primary selection:text-black no-scrollbar overflow-x-hidden">
-      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 px-6 lg:px-12 py-4 flex items-center justify-between ${scrolled ? 'bg-black shadow-2xl' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
-        <div className="flex items-center gap-10">
-          <Link to="/" onClick={() => { setFilterType(null); setFilterGenre(null); setSearchQuery(""); }}>
+      <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 px-6 lg:px-12 py-3 flex items-center justify-between ${scrolled ? 'bg-zinc-950/95 shadow-2xl' : 'bg-gradient-to-b from-black/80 to-transparent'}`}>
+        <div className="flex items-center gap-8">
+          <Link to="/" search={{ filter: '' }}>
             <InwiseLogo size="md" />
           </Link>
-          <div className="hidden lg:flex items-center gap-6 text-xs font-black uppercase tracking-widest text-zinc-300">
-            <button
-              onClick={() => { setFilterType(null); setFilterGenre(null); setSearchQuery(""); }}
-              className={navLinkClass(null)}
+          <div className="hidden lg:flex items-center gap-5 text-zinc-300">
+            <Link
+              to="/"
+              search={{ filter: '' }}
+              className={!filter && !searchQuery ? navActive : navInactive}
             >
               INÍCIO
-            </button>
+            </Link>
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1 hover:text-white outline-none uppercase">
-                Gêneros <ChevronDown className="w-3 h-3" />
+              <DropdownMenuTrigger className={`${navInactive} flex items-center gap-1 outline-none`}>
+                GÊNEROS <ChevronDown className="w-3 h-3" />
               </DropdownMenuTrigger>
               <DropdownMenuContent className="bg-zinc-950/95 border-zinc-800 grid grid-cols-2 w-64 p-2 backdrop-blur-xl">
                 {GENRES.map(g => (
                   <DropdownMenuItem
                     key={g}
-                    onClick={() => { setFilterType(null); setFilterGenre(g); setSearchQuery(""); }}
+                    onClick={() => { setFilterGenre(g); setSearchQuery(""); }}
                     className={`text-[10px] font-bold uppercase tracking-wider hover:bg-zinc-900 focus:bg-zinc-900 cursor-pointer ${filterGenre === g ? 'text-[#00d4ff]' : 'text-zinc-400 hover:text-primary'}`}
                   >
                     {g}
@@ -187,31 +202,41 @@ function Index() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <button
-              onClick={() => { setFilterType('movie'); setFilterGenre(null); setSearchQuery(""); }}
-              className={navLinkClass('movie')}
+            <Link
+              to="/"
+              search={{ filter: 'movie' }}
+              className={filter === 'movie' ? navActive : navInactive}
             >
               FILMES
-            </button>
-            <button
-              onClick={() => { setFilterType('series'); setFilterGenre(null); setSearchQuery(""); }}
-              className={navLinkClass('series')}
+            </Link>
+            <Link
+              to="/"
+              search={{ filter: 'series' }}
+              className={filter === 'series' ? navActive : navInactive}
             >
               SÉRIES
-            </button>
-            <button
-              onClick={() => { setFilterType('anime'); setFilterGenre(null); setSearchQuery(""); }}
-              className={navLinkClass('anime')}
+            </Link>
+            <Link
+              to="/"
+              search={{ filter: 'anime' }}
+              className={filter === 'anime' ? navActive : navInactive}
             >
               ANIMES
-            </button>
-            <button
-              onClick={() => { setFilterType('top'); setFilterGenre(null); setSearchQuery(""); }}
-              className={navLinkClass('top')}
+            </Link>
+            <Link
+              to="/"
+              search={{ filter: 'top' }}
+              className={filter === 'top' ? navActive : navInactive}
             >
               TOP IMDB
-            </button>
-            <Link to="/" className="text-[#00d4ff] drop-shadow-[0_0_10px_rgba(0,212,255,0.3)]">LANÇAMENTOS 2026</Link>
+            </Link>
+            <Link
+              to="/"
+              search={{ filter: '2026' }}
+              className={filter === '2026' ? navActive : `${navInactive} text-[#00d4ff] drop-shadow-[0_0_10px_rgba(0,212,255,0.3)]`}
+            >
+              LANÇAMENTOS 2026
+            </Link>
           </div>
         </div>
         <div className="flex items-center gap-5">
@@ -220,7 +245,7 @@ function Index() {
               type="text"
               placeholder="Buscar filmes, séries..."
               value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); if (e.target.value.length > 0) { setFilterType(null); setFilterGenre(null); } }}
+              onChange={(e) => { setSearchQuery(e.target.value); }}
               className="bg-zinc-900/60 border border-zinc-800/60 rounded-full pl-10 pr-4 py-2 text-[10px] font-bold uppercase tracking-widest w-48 focus:w-72 transition-all focus:border-primary/50 outline-none text-white placeholder:text-zinc-600"
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-primary transition-colors" />
@@ -228,7 +253,7 @@ function Index() {
         </div>
       </nav>
 
-      <header className="group relative h-[85vh] md:h-screen w-full overflow-hidden">
+      <header className="group relative h-[70vh] md:h-[80vh] w-full overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div key={hero?.id || 'skeleton'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 1.5 }} className="absolute inset-0">
             {loading || !hero ? (
@@ -237,52 +262,54 @@ function Index() {
               </div>
             ) : (
               <>
-                {/* Blurred background fill */}
                 <img src={hero.poster || hero.backdrop} className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-30" alt="" aria-hidden />
-                {/* Poster on right side at full height */}
-                <img src={hero.poster || hero.backdrop} className="absolute right-0 top-0 h-full w-auto object-contain z-0 opacity-80" style={{ maskImage: 'linear-gradient(to left, black 60%, transparent 100%)' }} alt={hero.title} />
+                <img src={hero.poster || hero.backdrop} className="absolute right-0 top-0 h-full w-auto object-contain z-0 opacity-80" style={{ maskImage: 'linear-gradient(to left, black 60%, transparent 100%)' }} alt={cleanTitle(hero.title)} />
               </>
             )}
-            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/70 to-transparent z-10" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/60 to-transparent z-10" />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/20 z-10" />
           </motion.div>
         </AnimatePresence>
 
-        <div className="absolute bottom-[18%] left-6 lg:left-12 z-20 max-w-3xl">
+        <div className="absolute bottom-[15%] left-6 lg:left-12 z-20 max-w-2xl">
           {loading || !hero ? (
-            <div className="space-y-5">
-              <Skeleton className="h-6 w-48 bg-zinc-800/50 rounded-full" />
-              <Skeleton className="h-20 w-[80%] bg-zinc-800/50 rounded-2xl" />
-              <Skeleton className="h-4 w-[55%] bg-zinc-800/50 rounded-full" />
-              <div className="flex gap-4 pt-4">
-                <Skeleton className="h-12 w-40 bg-zinc-800/50 rounded-full" />
-                <Skeleton className="h-12 w-40 bg-zinc-800/50 rounded-full" />
+            <div className="space-y-4">
+              <Skeleton className="h-5 w-40 bg-zinc-800/50 rounded-full" />
+              <Skeleton className="h-14 w-[75%] bg-zinc-800/50 rounded-xl" />
+              <Skeleton className="h-4 w-[50%] bg-zinc-800/50 rounded-full" />
+              <div className="flex gap-3 pt-3">
+                <Skeleton className="h-10 w-36 bg-zinc-800/50 rounded-full" />
+                <Skeleton className="h-10 w-32 bg-zinc-800/50 rounded-full" />
               </div>
             </div>
           ) : (
             <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3, duration: 0.8 }}>
-              <div className="flex items-center gap-3 mb-4 flex-wrap">
-                <Badge className="bg-[#00d4ff] text-black font-black uppercase tracking-[0.2em] text-[10px] px-4 py-1.5">Destaque</Badge>
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
+                <Badge className="bg-[#00d4ff] text-black font-black uppercase tracking-[0.2em] text-[10px] px-3 py-1">Destaque</Badge>
                 {hero.imdb_rating && (
-                  <div className="flex items-center gap-1.5 font-black text-lg text-yellow-400">
-                    <Star className="w-4 h-4 fill-current" />{Number(hero.imdb_rating).toFixed(1)}
+                  <div className="flex items-center gap-1.5 font-black text-base text-yellow-400">
+                    <Star className="w-3.5 h-3.5 fill-current" />{Number(hero.imdb_rating).toFixed(1)}
                   </div>
                 )}
                 <span className="text-zinc-400 font-black text-sm">{hero.year}</span>
                 <Badge variant="outline" className="border-zinc-700 text-zinc-400 font-black text-[9px]">4K HDR</Badge>
                 <Badge variant="outline" className="border-zinc-700 text-zinc-400 font-black text-[9px]">DUAL ÁUDIO</Badge>
               </div>
-              <h1 className="text-3xl lg:text-5xl font-black mb-5 tracking-tighter uppercase text-white leading-tight drop-shadow-2xl">{hero.title}</h1>
-              <p className="text-base text-zinc-400 mb-8 line-clamp-3 leading-relaxed max-w-lg">{hero.synopsis || "Assista agora em alta definição."}</p>
-              <div className="flex flex-wrap gap-4">
-                <Button asChild className="h-12 px-8 rounded-full bg-[#00d4ff] text-black font-black text-base hover:scale-105 hover:bg-white transition-all border-none">
+              <h1 className="text-2xl lg:text-4xl font-black mb-3 tracking-tighter uppercase text-white leading-tight drop-shadow-2xl">{cleanTitle(hero.title)}</h1>
+              {hero.genres && Array.isArray(hero.genres) && hero.genres.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {hero.genres.slice(0, 4).map((g: string) => (
+                    <span key={g} className="text-[9px] font-black uppercase tracking-wider bg-white/10 border border-white/10 rounded px-2 py-0.5 text-zinc-300">{g}</span>
+                  ))}
+                </div>
+              )}
+              <p className="text-sm text-zinc-400 mb-6 line-clamp-2 leading-relaxed max-w-lg">{hero.synopsis || "Assista agora em alta definição."}</p>
+              <div className="flex flex-wrap gap-3">
+                <Button asChild className="h-10 px-6 rounded-full bg-[#00d4ff] text-black font-black text-sm hover:scale-105 hover:bg-white transition-all border-none">
                   <Link to="/watch/$slug" params={{ slug: hero.slug }}><Play className="w-4 h-4 mr-2 fill-current" /> Assistir Agora</Link>
                 </Button>
-                <Button asChild className="h-12 px-8 rounded-full bg-zinc-900/60 backdrop-blur-xl border border-white/10 text-white font-black text-base hover:bg-zinc-800">
-                  <Link to="/watch/$slug" params={{ slug: hero.slug }}>↓ Baixar</Link>
-                </Button>
-                <Button className="h-12 px-8 rounded-full bg-zinc-900/60 backdrop-blur-xl border border-white/10 text-white font-black text-base hover:bg-zinc-800 italic">
-                  <Plus className="w-4 h-4 mr-2" /> Minha Lista
+                <Button asChild className="h-10 px-6 rounded-full bg-zinc-900/60 backdrop-blur-xl border border-white/10 text-white font-black text-sm hover:bg-zinc-800 transition-all">
+                  <Link to="/watch/$slug" params={{ slug: hero.slug }}><Download className="w-4 h-4 mr-2" /> Baixar</Link>
                 </Button>
               </div>
             </motion.div>
@@ -290,10 +317,10 @@ function Index() {
         </div>
 
         {!loading && displayTitles.length > 1 && (
-          <div className="absolute bottom-10 right-10 z-20 flex gap-2.5">
+          <div className="absolute bottom-6 right-8 z-20 flex gap-2">
             {displayTitles.slice(0, 6).map((_, i) => (
               <button key={i} onClick={() => setHeroIndex(i)}
-                className={`h-1.5 transition-all duration-500 rounded-full ${heroIndex === i ? 'w-10 bg-primary' : 'w-2.5 bg-zinc-700 hover:bg-zinc-500'}`} />
+                className={`h-1.5 transition-all duration-500 rounded-full ${heroIndex === i ? 'w-8 bg-[#00d4ff]' : 'w-2 bg-zinc-700 hover:bg-zinc-500'}`} />
             ))}
           </div>
         )}
@@ -302,29 +329,55 @@ function Index() {
           <>
             <button
               onClick={() => setHeroIndex(prev => (prev - 1 + Math.min(displayTitles.length, 6)) % Math.min(displayTitles.length, 6))}
-              className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/30 border border-white/10 flex items-center justify-center text-white hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100"
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/30 border border-white/10 flex items-center justify-center text-white hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => setHeroIndex(prev => (prev + 1) % Math.min(displayTitles.length, 6))}
-              className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/30 border border-white/10 flex items-center justify-center text-white hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100"
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-black/30 border border-white/10 flex items-center justify-center text-white hover:bg-black/60 transition-all opacity-0 group-hover:opacity-100"
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-4 h-4" />
             </button>
           </>
         )}
       </header>
 
-      <main className="relative z-20 -mt-28 pb-32">
+      <main className="relative z-20 -mt-20 pb-32">
         {searchQuery.length > 1 ? (
           <TitleRow title={`Resultados para "${searchQuery}"`} items={searchResults} loading={false} />
         ) : filterGenre ? (
           <TitleRow title={`Gênero: ${filterGenre}`} items={filteredByGenre.length > 0 ? filteredByGenre : displayTitles} loading={filteredByGenre.length === 0 && loading} />
-        ) : filterType ? (
-          <TitleRow title="Resultados" items={filteredTitles} loading={loading} />
+        ) : filter ? (
+          <>
+            <div className="px-6 lg:px-12 pt-6 pb-2 flex items-center gap-4">
+              <h2 className="text-sm font-black uppercase tracking-widest text-white">Catálogo</h2>
+              <div className="flex gap-2">
+                {(['Todos', 'Filmes', 'Séries'] as const).map(tab => (
+                  <Link key={tab} to="/" search={{ filter: tab === 'Todos' ? '' : tab === 'Filmes' ? 'movie' : 'series' }}
+                    className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider transition-all ${
+                      (filter === '' && tab === 'Todos') || (filter === 'movie' && tab === 'Filmes') || (filter === 'series' && tab === 'Séries')
+                        ? 'bg-[#00d4ff] text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                    }`}>{tab}</Link>
+                ))}
+              </div>
+            </div>
+            <TitleRow title="Resultados" items={filteredTitles} loading={loading} />
+          </>
         ) : (
           <>
+            <div className="px-6 lg:px-12 pt-6 pb-2 flex items-center gap-4">
+              <h2 className="text-sm font-black uppercase tracking-widest text-white">Catálogo</h2>
+              <div className="flex gap-2">
+                {(['Todos', 'Filmes', 'Séries'] as const).map(tab => (
+                  <Link key={tab} to="/" search={{ filter: tab === 'Todos' ? '' : tab === 'Filmes' ? 'movie' : 'series' }}
+                    className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-wider transition-all ${
+                      (filter === '' && tab === 'Todos') || (filter === 'movie' && tab === 'Filmes') || (filter === 'series' && tab === 'Séries')
+                        ? 'bg-[#00d4ff] text-black' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                    }`}>{tab}</Link>
+                ))}
+              </div>
+            </div>
             <TitleRow title="Lançamentos Recentes" items={displayTitles.slice(0, 20)} loading={loading} />
             <TitleRow title="Top IMDb" items={topRated.slice(0, 20)} loading={loading} />
             {movies.length > 0 && <TitleRow title="Filmes em Destaque" items={movies.slice(0, 20)} loading={false} />}
@@ -346,18 +399,18 @@ function Index() {
           <div>
             <h4 className="font-black uppercase tracking-[0.3em] text-[10px] mb-5 text-zinc-300">Catálogo</h4>
             <ul className="space-y-3 text-[11px] font-black uppercase tracking-widest text-zinc-500">
-              <li><button onClick={() => { setFilterType('movie'); setFilterGenre(null); }} className="hover:text-primary transition-colors">Filmes</button></li>
-              <li><button onClick={() => { setFilterType('series'); setFilterGenre(null); }} className="hover:text-primary transition-colors">Séries</button></li>
-              <li><button onClick={() => { setFilterType('anime'); setFilterGenre(null); }} className="hover:text-primary transition-colors">Animes</button></li>
-              <li><Link to="/" className="hover:text-primary transition-colors">Lançamentos 2026</Link></li>
+              <li><Link to="/" search={{ filter: 'movie' }} className="hover:text-primary transition-colors">Filmes</Link></li>
+              <li><Link to="/" search={{ filter: 'series' }} className="hover:text-primary transition-colors">Séries</Link></li>
+              <li><Link to="/" search={{ filter: 'anime' }} className="hover:text-primary transition-colors">Animes</Link></li>
+              <li><Link to="/" search={{ filter: '2026' }} className="hover:text-primary transition-colors">Lançamentos 2026</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="font-black uppercase tracking-[0.3em] text-[10px] mb-5 text-zinc-300">Suporte</h4>
             <ul className="space-y-3 text-[11px] font-black uppercase tracking-widest text-zinc-500">
-              <li><Link to="/" className="hover:text-primary">Ajuda & FAQ</Link></li>
-              <li><Link to="/" className="hover:text-primary">DMCA</Link></li>
-              <li><Link to="/" className="hover:text-primary">Privacidade</Link></li>
+              <li><Link to="/" search={{ filter: '' }} className="hover:text-primary">Ajuda & FAQ</Link></li>
+              <li><Link to="/" search={{ filter: '' }} className="hover:text-primary">DMCA</Link></li>
+              <li><Link to="/" search={{ filter: '' }} className="hover:text-primary">Privacidade</Link></li>
             </ul>
           </div>
           <div>
