@@ -21,7 +21,7 @@ function cleanTitle(t: string): string {
 }
 
 export const Route = createFileRoute("/")({
-  validateSearch: (s) => ({ filter: (s.filter as string) || '' }),
+  validateSearch: (s) => ({ filter: (s.filter as string) || undefined }),
   component: Index,
 });
 
@@ -70,7 +70,8 @@ function CatalogCard({ item }: { item: any }) {
 }
 
 function Index() {
-  const { filter } = Route.useSearch();
+  const { filter: filterRaw } = Route.useSearch();
+  const filter = filterRaw ?? '';
   const [titles, setTitles] = useState<any[]>([]);
   const [heroTitles, setHeroTitles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -216,14 +217,14 @@ function Index() {
         <div className="relative px-4 lg:px-8">
           <nav className="flex items-center gap-0 h-[220px] w-full text-white">
             <div className="flex items-center mr-6 flex-shrink-0">
-              <Link to="/" search={{ filter: '' }}>
+              <Link to="/" search={{ filter: undefined }}>
                 <InwiseLogo size="sm" />
               </Link>
             </div>
 
             <ul className="hidden sm:flex items-center gap-5 lg:gap-6 list-none flex-1 overflow-x-auto no-scrollbar">
               <li className="flex-shrink-0">
-                <Link to="/" search={{ filter: '' }} className={!filter && !isSearching ? navActive : navInactive}>Início</Link>
+                <Link to="/" search={{ filter: undefined }} className={!filter && !isSearching ? navActive : navInactive}>Início</Link>
               </li>
               <li className="flex-shrink-0">
                 <Link to="/" search={{ filter: 'movie' }} className={filter === 'movie' ? navActive : navInactive}>Filmes</Link>
