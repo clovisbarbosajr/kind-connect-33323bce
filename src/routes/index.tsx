@@ -231,15 +231,20 @@ function Index() {
       <header className="group relative h-[85vh] md:h-screen w-full overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div key={hero?.id || 'skeleton'} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 1.5 }} className="absolute inset-0">
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/50 to-transparent z-10" />
             {loading || !hero ? (
               <div className="w-full h-full bg-zinc-950">
                 <div className="w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(0,212,255,0.05),transparent_50%)]" />
               </div>
             ) : (
-              <img src={hero.backdrop || hero.poster} className="w-full h-full object-cover object-center" alt={hero.title} />
+              <>
+                {/* Blurred background fill */}
+                <img src={hero.poster || hero.backdrop} className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-30" alt="" aria-hidden />
+                {/* Poster on right side at full height */}
+                <img src={hero.poster || hero.backdrop} className="absolute right-0 top-0 h-full w-auto object-contain z-0 opacity-80" style={{ maskImage: 'linear-gradient(to left, black 60%, transparent 100%)' }} alt={hero.title} />
+              </>
             )}
+            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/70 to-transparent z-10" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/20 z-10" />
           </motion.div>
         </AnimatePresence>
 
