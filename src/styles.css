@@ -2,6 +2,9 @@
   display: none !important;
 }
 
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 @import "tailwindcss";
 @source "../src";
 @import "tw-animate-css";

@@ -90,6 +90,12 @@ function Watch() {
 
   const openPlayer = (magnet: string) => {
     setChoiceModal(null);
+    // Open Webtor.io — streams torrent online in browser (any device)
+    window.open(`https://webtor.io/#${encodeURIComponent(magnet)}`, '_blank');
+  };
+
+  const downloadTorrent = (magnet: string) => {
+    setChoiceModal(null);
     window.location.href = magnet;
   };
 
@@ -167,20 +173,20 @@ function Watch() {
               <div className="flex flex-col gap-3">
                 <Button
                   onClick={() => openPlayer(choiceModal.magnet)}
-                  className="w-full h-12 bg-[#00d4ff] hover:bg-cyan-300 text-black font-bold rounded-xl gap-2"
+                  className="w-full h-12 bg-[#4ade80] hover:bg-[#22c55e] text-black font-bold rounded-xl gap-2"
                 >
-                  <Play className="w-4 h-4 fill-current" /> Abrir no Player Local
+                  <Play className="w-4 h-4 fill-current" /> Assistir Online
                 </Button>
                 <Button
-                  onClick={() => openPlayer(choiceModal.magnet)}
+                  onClick={() => downloadTorrent(choiceModal.magnet)}
                   variant="outline"
                   className="w-full h-12 bg-transparent border border-zinc-700 hover:border-zinc-500 text-white font-bold rounded-xl gap-2"
                 >
                   <Download className="w-4 h-4" /> Baixar Torrent
                 </Button>
               </div>
-              <p className="text-zinc-700 text-[9px] text-center mt-3 uppercase tracking-widest">
-                Abre o magnet no seu player (VLC, qBittorrent etc.)
+              <p className="text-zinc-600 text-[9px] text-center mt-3">
+                "Assistir Online" usa Webtor.io • funciona em qualquer dispositivo
               </p>
             </motion.div>
           </motion.div>
@@ -400,13 +406,23 @@ function Watch() {
                             )}
                           </div>
                         </div>
-                        <Button
-                          className="h-9 px-5 bg-[#4ade80] hover:bg-[#22c55e] text-black font-bold text-sm rounded-lg border-none gap-2 flex-shrink-0"
-                          onClick={e => { e.stopPropagation(); handleTorrentClick(opt.magnet, `${opt.quality || ''} ${opt.audio_type || ''}`.trim(), opt.quality, opt.audio_type); }}
-                        >
-                          <Download className="w-4 h-4" />
-                          DOWNLOAD
-                        </Button>
+                        <div className="flex gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                          <Button
+                            className="h-9 px-4 bg-[#4ade80] hover:bg-[#22c55e] text-black font-bold text-xs rounded-lg border-none gap-1.5"
+                            onClick={() => { openPlayer(opt.magnet); }}
+                          >
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            ASSISTIR
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="h-9 px-4 bg-transparent border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-bold text-xs rounded-lg gap-1.5"
+                            onClick={() => downloadTorrent(opt.magnet)}
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            BAIXAR
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -464,6 +480,19 @@ function Watch() {
               <p className="text-zinc-700 text-xs">Nenhum título relacionado.</p>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* ── Sobre ── */}
+      <div className="max-w-6xl mx-auto px-4 lg:px-8 pb-10">
+        <div className="border border-zinc-800/40 rounded-xl p-5">
+          <h3 className="text-sm font-bold text-white mb-2">Sobre</h3>
+          <p className="text-xs text-zinc-500 leading-relaxed">
+            <strong className="text-zinc-400">{displayTitle}</strong> faz parte do nosso catálogo.
+            Aqui você encontra filmes, séries e muito mais para baixar gratuitamente via torrent.
+            O conteúdo é atualizado constantemente com os lançamentos assim que disponíveis.
+            Para baixar <em>{displayTitle.toLowerCase()}</em>, use um dos links acima.
+          </p>
         </div>
       </div>
 

@@ -5,8 +5,8 @@ interface InwiseLogoProps {
 
 export function InwiseLogo({ className = "", size = "md" }: InwiseLogoProps) {
   // h values: sm=navbar, md=footer, lg=hero/large display
-  const sizes = { sm: "h-[240px]", md: "h-[280px]", lg: "h-[360px]" };
-  const shifts = { sm: "24px", md: "28px", lg: "36px" };
+  const sizes = { sm: "h-[42px]", md: "h-[48px]", lg: "h-[60px]" };
+  const shifts = { sm: "0px", md: "0px", lg: "0px" };
 
   return (
     <div className={`flex items-center justify-center ${className}`}>
