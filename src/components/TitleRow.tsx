@@ -1,9 +1,13 @@
-import { useState, useRef } from "react";
+import { useRef } from "react";
 import { Link } from "@tanstack/react-router";
-import { motion } from "framer-motion";
-import { Play, Star, ChevronLeft, ChevronRight } from "lucide-react";
+import { Star, ChevronLeft, ChevronRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
+
+interface TitleRowProps {
+  title: string;
+  items: any[];
+  loading: boolean;
+}
 
 function cleanTitle(t: string): string {
   if (!t) return t;
@@ -14,118 +18,71 @@ function cleanTitle(t: string): string {
     .trim();
 }
 
-interface TitleRowProps {
-  title: string;
-  items: any[];
-  loading: boolean;
-}
-
 export function TitleRow({ title, items, loading }: TitleRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [showLeftArrow, setShowLeftArrow] = useState(false);
-  const [showRightArrow, setShowRightArrow] = useState(true);
-
-  const handleScroll = () => {
-    if (scrollRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
-      setShowLeftArrow(scrollLeft > 0);
-      setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 10);
-    }
-  };
-
-  const scroll = (direction: 'left' | 'right') => {
-    if (scrollRef.current) {
-      const amount = direction === 'left' ? -scrollRef.current.clientWidth * 0.8 : scrollRef.current.clientWidth * 0.8;
-      scrollRef.current.scrollBy({ left: amount, behavior: 'smooth' });
-    }
+  const scroll = (dir: 'left' | 'right') => {
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -600 : 600, behavior: 'smooth' });
   };
 
   return (
-    <div className="space-y-4 mb-10 relative group/row">
-      <div className="flex items-center justify-between px-6 lg:px-12">
-        <h2 className="text-lg md:text-xl font-black tracking-tighter uppercase text-white flex items-center gap-2.5">
-          <span className="w-1 h-5 bg-[#00d4ff] rounded-full" />
+    <div className="mb-6 relative group/row">
+      <div className="flex items-center justify-between px-4 lg:px-10 mb-2.5">
+        <h2 className="text-[12px] font-black uppercase tracking-widest text-white flex items-center gap-2">
+          <span className="w-[3px] h-4 bg-[#00d4ff] rounded-full inline-block" />
           {title}
         </h2>
-        <Link to="/" className="text-[10px] font-black text-zinc-500 hover:text-primary transition uppercase tracking-[0.2em] border-b border-transparent hover:border-primary">
-          Ver Tudo
+        <Link to="/" className="text-[9px] font-bold text-zinc-600 hover:text-[#00d4ff] transition uppercase tracking-widest">
+          Ver Tudo →
         </Link>
       </div>
 
       <div className="relative">
-        {showLeftArrow && (
-          <button
-            onClick={() => scroll('left')}
-            className="absolute left-0 top-0 bottom-0 z-40 bg-black/60 w-8 hidden md:flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity backdrop-blur-sm"
-          >
-            <ChevronLeft className="w-5 h-5 text-white" />
-          </button>
-        )}
+        <button onClick={() => scroll('left')}
+          className="absolute left-0 top-0 bottom-0 z-40 w-7 hidden md:flex items-center justify-center bg-gradient-to-r from-black to-transparent opacity-0 group-hover/row:opacity-100 transition-opacity">
+          <ChevronLeft className="w-4 h-4 text-white" />
+        </button>
 
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          className="flex overflow-x-auto gap-4 px-6 lg:px-12 no-scrollbar scroll-smooth"
-        >
-          {loading ? (
-            Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="min-w-[115px] md:min-w-[150px] aspect-[2/3] rounded-xl bg-zinc-900 animate-pulse" />
-            ))
-          ) : items.length > 0 ? (
-            items.map((item) => (
-              <Link
-                key={item.id}
-                to="/watch/$slug"
-                params={{ slug: item.slug }}
-                title={cleanTitle(item.title)}
-                className="min-w-[115px] md:min-w-[150px] group/card relative flex-shrink-0"
-              >
-                <motion.div
-                  whileHover={{ scale: 1.05, zIndex: 10 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                  className="relative aspect-[2/3] rounded-xl overflow-hidden shadow-2xl bg-zinc-900 border border-zinc-800/50"
-                >
-                  <img
-                    src={item.poster || item.backdrop || 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=400'}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-110"
-                    alt={item.title}
-                    loading="lazy"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-80" />
-
-                  <div className="absolute top-2 right-2 flex flex-col gap-1 items-end opacity-0 group-hover/card:opacity-100 transition-opacity">
-                    <Badge className="bg-primary text-black text-[8px] font-black border-none px-1 h-4">4K</Badge>
-                    <Badge className="bg-zinc-950/90 text-white text-[8px] font-black border-none px-1 h-4">DUAL</Badge>
-                  </div>
-
-                  <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded flex items-center gap-1 border border-white/10">
-                    <Star className="w-2.5 h-2.5 text-yellow-400 fill-current" />
-                    <span className="text-[9px] font-black">{item.imdb_rating ? Number(item.imdb_rating).toFixed(1) : '?'}</span>
-                  </div>
-
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center">
-                    <div className="w-10 h-10 bg-[#00d4ff] rounded-full flex items-center justify-center text-black shadow-[0_0_15px_rgba(0,212,255,0.5)]">
-                      <Play className="w-5 h-5 fill-current ml-0.5" />
+        <div ref={scrollRef} className="flex overflow-x-auto gap-[6px] px-4 lg:px-10 no-scrollbar pb-1">
+          {loading
+            ? Array.from({ length: 12 }).map((_, i) => (
+                <Skeleton key={i} className="min-w-[110px] w-[110px] aspect-[2/3] rounded bg-zinc-900 flex-shrink-0" />
+              ))
+            : items.length > 0
+            ? items.map((item) => (
+                <Link key={item.id} to="/watch/$slug" params={{ slug: item.slug }}
+                  title={cleanTitle(item.title)}
+                  className="min-w-[110px] w-[110px] flex-shrink-0 group/card">
+                  <div className="relative aspect-[2/3] rounded overflow-hidden bg-zinc-900">
+                    <img
+                      src={item.poster || item.backdrop || 'https://images.unsplash.com/photo-1594909122845-11baa439b7bf?q=80&w=300'}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover/card:scale-105"
+                      alt={cleanTitle(item.title)}
+                      loading="lazy"
+                    />
+                    {item.imdb_rating && (
+                      <div className="absolute top-1 left-1 bg-yellow-400 text-black text-[8px] font-black px-1 py-0.5 rounded-sm flex items-center gap-0.5 leading-none">
+                        <Star className="w-2 h-2 fill-current flex-shrink-0" />
+                        {Number(item.imdb_rating).toFixed(1)}
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-black/0 group-hover/card:bg-black/40 transition-all duration-200 flex items-center justify-center">
+                      <div className="w-7 h-7 bg-[#00d4ff] rounded-full items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity hidden group-hover/card:flex">
+                        <svg className="w-3 h-3 fill-black ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                      </div>
                     </div>
                   </div>
-                </motion.div>
-              </Link>
-            ))
-          ) : (
-            <div className="flex items-center justify-center min-w-full h-40 border-2 border-dashed border-zinc-900 rounded-2xl">
-              <p className="text-zinc-700 font-black uppercase text-xs tracking-widest">Em breve</p>
-            </div>
-          )}
+                  <p className="mt-1 text-[9px] text-zinc-500 truncate group-hover/card:text-white transition-colors px-0.5 leading-tight">
+                    {cleanTitle(item.title)}
+                  </p>
+                </Link>
+              ))
+            : <div className="flex items-center justify-center w-full h-28 text-zinc-700 text-[10px] uppercase tracking-widest font-bold">Em breve</div>}
         </div>
 
-        {showRightArrow && !loading && items.length > 0 && (
-          <button
-            onClick={() => scroll('right')}
-            className="absolute right-0 top-0 bottom-0 z-40 bg-black/60 w-8 hidden md:flex items-center justify-center opacity-0 group-hover/row:opacity-100 transition-opacity backdrop-blur-sm"
-          >
-            <ChevronRight className="w-5 h-5 text-white" />
-          </button>
-        )}
+        <button onClick={() => scroll('right')}
+          className="absolute right-0 top-0 bottom-0 z-40 w-7 hidden md:flex items-center justify-center bg-gradient-to-l from-black to-transparent opacity-0 group-hover/row:opacity-100 transition-opacity">
+          <ChevronRight className="w-4 h-4 text-white" />
+        </button>
       </div>
     </div>
   );
