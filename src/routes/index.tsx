@@ -50,9 +50,8 @@ function CatalogCard({ item }: { item: any }) {
               className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 hover:scale-105"
             />
             {item.imdb_rating && (
-              <div className="absolute top-[5px] right-[5px] z-10 text-white bg-black/50 rounded-[10px] px-[5px] py-[1px] font-bold text-[0.85em] leading-[1.7em] flex items-center gap-1"
+              <div className="absolute top-[5px] right-[5px] z-10 text-white bg-black/50 rounded-[10px] px-[5px] py-[1px] font-bold text-[0.85em] leading-[1.7em]"
                 style={{ fontFamily: 'Roobert,Arial,Helvetica,sans-serif', filter: 'drop-shadow(0px 0px 6px #0e1723f5)' }}>
-                <Star className="w-2.5 h-2.5 fill-[#00d4ff] text-[#00d4ff]" />
                 {Number(item.imdb_rating).toFixed(1)}
               </div>
             )}
