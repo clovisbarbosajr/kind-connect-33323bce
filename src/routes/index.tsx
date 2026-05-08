@@ -281,7 +281,7 @@ function Index() {
 
       {/* ── HERO ── */}
       {!isSearching && (
-        <div className="relative w-full overflow-hidden" style={{ height: '100vh', minHeight: '520px', maxHeight: '860px' }}>
+        <div className="relative w-full overflow-hidden" style={{ height: '62vh', minHeight: '420px', maxHeight: '680px' }}>
 
           {/* Background — widescreen landscape image fills full container */}
           {hero ? (
