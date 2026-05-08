@@ -8,7 +8,14 @@ export function InwiseLogo({ className = "", size = "md" }: InwiseLogoProps) {
   const textSizes = { sm: "text-lg", md: "text-2xl", lg: "text-4xl" };
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
+    <div className={`flex items-center gap-1 ${className}`}>
+      <img
+        src="/logo.png"
+        alt="INWISE"
+        className={`${sizes[size]} w-auto object-contain flex-shrink-0`}
+        style={{ mixBlendMode: 'screen' }}
+        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+      />
       <span className={`${textSizes[size]} font-black tracking-tight leading-none`}>
         <span className="text-white">IN</span><span className="text-[#00d4ff]">WISE</span>
         <span className="text-[#00d4ff]/50 font-bold tracking-widest uppercase"
