@@ -9,12 +9,6 @@ export function InwiseLogo({ className = "", size = "md" }: InwiseLogoProps) {
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-      <img
-        src="/logo.png"
-        alt=""
-        className={`${sizes[size]} w-auto object-contain`}
-        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-      />
       <span className={`${textSizes[size]} font-black tracking-tight leading-none`}>
         <span className="text-white">IN</span><span className="text-[#00d4ff]">WISE</span>
         <span className="text-[#00d4ff]/50 font-bold tracking-widest uppercase"
