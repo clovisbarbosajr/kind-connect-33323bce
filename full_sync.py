@@ -423,53 +423,134 @@ def _normalize_audio(raw: str) -> str:
     return raw.strip() if raw.strip() else "Dual Áudio"
 
 
+def _unshuffle(e: str) -> str:
+    """Reverse the site's string-shuffling algorithm (same as the gateway)."""
+    if not e or not e.strip():
+        return ""
+    o = len(e)
+    seen = [False] * o
+    result = []
+    n = 0
+    for _ in range(o):
+        while seen[n]:
+            n = (n + 1) % o
+        seen[n] = True
+        result.append(e[n])
+        n = (n + 3) % o
+    return "".join(result)
+
+
 def extract_button_links(page) -> list:
     """
-    Extract download options from the site's buttonLinks JS variable.
-    Each top-level item in buttonLinks may represent a movie quality option
-    or a series episode. Returns list of dicts preserving the item title.
+    Extract download options from a title page.
+
+    The site now stores each magnet URL in a `data-u` attribute (shuffled
+    with the same algorithm as the gateway). Each <div class="buttons-content">
+    contains one <a data-u="..."> plus span texts: [AudioType, 'Download',
+    'Quality (Size)'].
+
+    Falls back to the legacy buttonLinks JS variable if data-u is absent.
     """
-    import json
+    import json, html as html_lib
     results = []
+
     try:
-        html = page.content()
-        # Match buttonLinks=[{...}] JS variable (greedy to get full array)
-        m = re.search(r'var\s+buttonLinks\s*=\s*(\[[\s\S]*?\])\s*;', html)
-        if not m:
-            m = re.search(r'buttonLinks\s*=\s*(\[[\s\S]*?\])\s*[,;]', html)
-        if not m:
-            log.debug("[btnlinks] buttonLinks not found in page")
-            return results
-        raw = m.group(1)
-        # Fix JS object notation to valid JSON
-        raw = re.sub(r'([{,]\s*)([a-zA-Z_]\w*)(\s*:)', r'\1"\2"\3', raw)
-        raw = raw.replace("'", '"')
-        # Remove trailing commas before } or ]
-        raw = re.sub(r',\s*([}\]])', r'\1', raw)
-        data = json.loads(raw)
-        for item in data:
-            item_title = item.get("title", "")
-            btn_info = item.get("btnInfo", [])
-            for opt in btn_info:
-                magnet = opt.get("url", "")
+        raw_html = page.content()
+
+        # ── Strategy 1: data-u attributes (current site format) ──────────────
+        # Use Playwright to get all elements with data-u directly
+        links_data = page.evaluate("""
+            () => {
+                const out = [];
+                // Each download option is inside .buttons-content
+                document.querySelectorAll('.buttons-content').forEach(function(container) {
+                    const a = container.querySelector('a[data-u]');
+                    if (!a) return;
+                    const shuffled = a.getAttribute('data-u') || '';
+                    // Collect all <span> text nodes (skip empty ones)
+                    const spans = [];
+                    container.querySelectorAll('span').forEach(function(s) {
+                        const t = (s.innerText || s.textContent || '').trim();
+                        if (t && t !== 'Download' && !s.children.length) spans.push(t);
+                    });
+                    // Also grab episode/item label from nearest heading above
+                    let itemTitle = '';
+                    let el = container;
+                    for (let i = 0; i < 6 && el; i++) {
+                        el = el.parentElement;
+                        if (!el) break;
+                        const h = el.querySelector('h1,h2,h3,h4,.item-title,.ep-title,.episode-title');
+                        if (h) { itemTitle = (h.innerText || h.textContent || '').trim(); break; }
+                    }
+                    out.push({ shuffled: shuffled, spans: spans, itemTitle: itemTitle });
+                });
+                return out;
+            }
+        """)
+
+        if links_data:
+            for entry in links_data:
+                shuffled = html_lib.unescape(entry.get("shuffled", ""))
+                magnet = _unshuffle(shuffled)
                 if not magnet or not magnet.startswith("magnet:"):
                     continue
-                audio = _normalize_audio(opt.get("audioType", ""))
-                res   = (opt.get("resolution") or "1080p").strip()
-                size  = opt.get("size", "")
-                codec = opt.get("dynamicRange", "")
-                ftype = opt.get("fileType", "movie")
+                spans = entry.get("spans", [])
+                item_title = entry.get("itemTitle", "")
+                # spans order: [AudioType?, Quality+Size?]
+                audio_raw = ""
+                quality   = "1080p"
+                size      = ""
+                for s in spans:
+                    sl = s.lower()
+                    if any(k in sl for k in ("dual", "dub", "leg", "ptbr", "nacional", "áudio")):
+                        audio_raw = s
+                    elif re.match(r'\d{3,4}p', s, re.IGNORECASE):
+                        quality = re.match(r'(\d{3,4}p)', s, re.IGNORECASE).group(1)
+                        m_size = re.search(r'\(([^)]+)\)', s)
+                        if m_size:
+                            size = m_size.group(1)
+                    elif re.match(r'\d+\.\d+\s*[GgMm][Bb]', s):
+                        size = s
                 results.append({
-                    "item_title": item_title,   # used to identify episodes in series
+                    "item_title": item_title,
                     "magnet":     magnet,
-                    "quality":    res,
-                    "audio_type": audio,
+                    "quality":    quality,
+                    "audio_type": _normalize_audio(audio_raw),
                     "size":       size,
-                    "codec":      codec,
-                    "file_type":  ftype,
+                    "codec":      "",
+                    "file_type":  "movie",
                 })
+            if results:
+                return results
+
+        # ── Strategy 2: legacy buttonLinks JS variable ────────────────────────
+        m = re.search(r'var\s+buttonLinks\s*=\s*(\[[\s\S]*?\])\s*;', raw_html)
+        if not m:
+            m = re.search(r'buttonLinks\s*=\s*(\[[\s\S]*?\])\s*[,;]', raw_html)
+        if m:
+            raw = m.group(1)
+            raw = re.sub(r'([{,]\s*)([a-zA-Z_]\w*)(\s*:)', r'\1"\2"\3', raw)
+            raw = raw.replace("'", '"')
+            raw = re.sub(r',\s*([}\]])', r'\1', raw)
+            data = json.loads(raw)
+            for item in data:
+                item_title = item.get("title", "")
+                for opt in item.get("btnInfo", []):
+                    magnet = opt.get("url", "")
+                    if not magnet or not magnet.startswith("magnet:"):
+                        continue
+                    results.append({
+                        "item_title": item_title,
+                        "magnet":     magnet,
+                        "quality":    (opt.get("resolution") or "1080p").strip(),
+                        "audio_type": _normalize_audio(opt.get("audioType", "")),
+                        "size":       opt.get("size", ""),
+                        "codec":      opt.get("dynamicRange", ""),
+                        "file_type":  opt.get("fileType", "movie"),
+                    })
+
     except Exception as e:
-        log.debug("[btnlinks] parse error: %s  (raw start: %.200s)", e, raw[:200] if 'raw' in dir() else "")
+        log.debug("[btnlinks] parse error: %s", e)
     return results
 
 
