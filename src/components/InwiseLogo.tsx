@@ -4,8 +4,8 @@ interface InwiseLogoProps {
 }
 
 export function InwiseLogo({ className = "", size = "md" }: InwiseLogoProps) {
-  const sizes = { sm: "h-9", md: "h-11", lg: "h-16" };
-  const textSizes = { sm: "text-lg", md: "text-2xl", lg: "text-4xl" };
+  const sizes = { sm: "h-11", md: "h-13", lg: "h-18" };
+  const textSizes = { sm: "text-xl", md: "text-3xl", lg: "text-5xl" };
 
   return (
     <div className={`flex items-center gap-1 ${className}`}>
