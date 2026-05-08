@@ -5,9 +5,8 @@ interface InwiseLogoProps {
 
 export function InwiseLogo({ className = "", size = "md" }: InwiseLogoProps) {
   // h values: sm=navbar, md=footer, lg=hero/large display
-  const sizes = { sm: "h-[120px]", md: "h-[140px]", lg: "h-[180px]" };
-  // PNG has cloud in upper portion with transparent space below — shift down to align cloud center with nav text
-  const shifts = { sm: "12px", md: "14px", lg: "18px" };
+  const sizes = { sm: "h-[240px]", md: "h-[280px]", lg: "h-[360px]" };
+  const shifts = { sm: "24px", md: "28px", lg: "36px" };
 
   return (
     <div className={`flex items-center justify-center ${className}`}>
