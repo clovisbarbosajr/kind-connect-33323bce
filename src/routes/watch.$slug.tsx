@@ -86,7 +86,7 @@ function Watch() {
 
   const openPlayer = (magnet: string, _label: string) => {
     setChoiceModal(null);
-    window.open(`https://instant.io/#${encodeURIComponent(magnet)}`, '_blank');
+    window.location.href = magnet;
   };
 
   const downloadTorrent = (magnet: string) => {
@@ -174,8 +174,8 @@ function Watch() {
                   onClick={() => openPlayer(choiceModal.magnet, choiceModal.label)}
                   className="w-full h-14 bg-[#00d4ff] hover:bg-white text-black font-black uppercase tracking-widest text-sm rounded-2xl border-none gap-3 transition-all hover:scale-[1.02]"
                 >
-                  <MonitorPlay className="w-5 h-5" />
-                  Assistir Online
+                  <Play className="w-5 h-5" />
+                  Abrir no Player Local
                 </Button>
                 <Button
                   onClick={() => downloadTorrent(choiceModal.magnet)}
@@ -188,7 +188,7 @@ function Watch() {
               </div>
 
               <p className="text-zinc-700 text-[9px] font-black uppercase tracking-widest text-center mt-4">
-                "Assistir" usa WebTorrent no navegador • "Baixar" abre no cliente torrent
+                Ambos abrem o magnet no seu player local (VLC, qBittorrent etc.)
               </p>
             </motion.div>
           </motion.div>
