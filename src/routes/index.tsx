@@ -81,7 +81,7 @@ function Index() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
-  const searchDebounce = useRef<ReturnType<typeof setTimeout>>();
+  const searchDebounce = useRef<number>();
   const PAGE_SIZE = 56;
 
   useEffect(() => {
