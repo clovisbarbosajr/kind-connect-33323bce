@@ -99,7 +99,11 @@ function Index() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => { setPage(0); }, [filter]);
+  // Reset titles + page when filter changes
+  useEffect(() => {
+    setTitles([]);
+    setPage(0);
+  }, [filter]);
 
   useEffect(() => {
     async function fetchTitles() {
@@ -111,7 +115,11 @@ function Index() {
         else if (filter === 'anime') q = q.eq('type', 'anime');
         else if (filter === 'top') q = q.order('imdb_rating', { ascending: false });
         else if (filter === '2026') q = q.eq('year', 2026);
-        if (filter !== 'top') q = q.order('created_at', { ascending: false });
+        // Default: year DESC (2026 first), then newest first
+        if (filter !== 'top') {
+          q = q.order('year', { ascending: false });
+          q = q.order('created_at', { ascending: false });
+        }
         q = q.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
         const { data, error, count } = await q;
         if (error) throw error;
@@ -155,7 +163,7 @@ function Index() {
     if (displayTitles.length > 0) {
       const timer = setInterval(() => {
         setHeroIndex(prev => (prev + 1) % Math.min(displayTitles.length, 8));
-      }, 7000);
+      }, 5000);
       return () => clearInterval(timer);
     }
   }, [displayTitles.length]);
@@ -254,7 +262,7 @@ function Index() {
 
       {/* ── HERO ── */}
       {!isSearching && (
-        <div className="relative w-full overflow-hidden" style={{ height: '580px' }}>
+        <div className="relative w-full overflow-hidden" style={{ height: '100vh', minHeight: '500px', maxHeight: '820px' }}>
 
           {/* Blurred background — full fill using poster */}
           {hero && (
