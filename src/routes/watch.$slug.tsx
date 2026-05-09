@@ -361,9 +361,7 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
     };
     fadeRef.current = fade;
 
-    // Detect via player.js postMessage — 'ready' fires exactly when webtor's
-    // terminal finishes and the actual video player initializes.
-    // Any player.js event = terminal phase is over = safe to show the film.
+    // Strategy 1: player.js postMessage (fires when terminal → video player)
     const onMessage = (e: MessageEvent) => {
       try {
         const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
@@ -373,12 +371,26 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
     };
     window.addEventListener('message', onMessage);
 
-    // Hard fallback at 90s — covers slow connections and cases where player.js
-    // messages don't arrive (different webtor player versions)
-    const fallback = setTimeout(fade, 90000);
+    // Strategy 2: MutationObserver — as soon as webtor injects its iframe,
+    // give it 15s more (terminal phase) then fade regardless.
+    let iframeTimer: ReturnType<typeof setTimeout> | null = null;
+    const container = document.getElementById(id);
+    const observer = container
+      ? new MutationObserver(() => {
+          if (!iframeTimer && container.querySelector('iframe')) {
+            iframeTimer = setTimeout(fade, 15000);
+          }
+        })
+      : null;
+    if (observer && container) observer.observe(container, { childList: true, subtree: true });
+
+    // Strategy 3: hard fallback — 25s covers cases where SDK never loads
+    const fallback = setTimeout(fade, 25000);
 
     return () => {
       clearTimeout(fallback);
+      if (iframeTimer) clearTimeout(iframeTimer);
+      observer?.disconnect();
       window.removeEventListener('message', onMessage);
       const el = document.getElementById(id);
       if (el) el.innerHTML = '';
