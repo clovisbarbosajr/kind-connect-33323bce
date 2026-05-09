@@ -339,6 +339,7 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
         lang: 'pt',
         width: '100%',
         height: '100%',
+        autoplay: true,
       });
     };
 
@@ -361,35 +362,55 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
     };
     fadeRef.current = fade;
 
-    // Strategy 1: player.js postMessage (fires when terminal → video player)
+    // Send play command to the webtor iframe via player.js protocol
+    const tryPlay = () => {
+      const container = document.getElementById(id);
+      const iframe = container?.querySelector('iframe') as HTMLIFrameElement | null;
+      if (!iframe?.contentWindow) return;
+      try {
+        iframe.contentWindow.postMessage(JSON.stringify({
+          context: 'player.js', version: '0.0.11', method: 'play', value: null,
+        }), '*');
+      } catch {}
+    };
+
+    // Strategy 1: player.js postMessage
+    // - 'ready' = player initialized → send play command, keep overlay
+    // - 'play'/'timeupdate' = video actually running → fade overlay
     const onMessage = (e: MessageEvent) => {
       try {
         const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
         if (!d || d.context !== 'player.js') return;
-        if (d.event === 'ready' || d.event === 'play' || d.event === 'timeupdate') fade();
+        if (d.event === 'ready') tryPlay();
+        if (d.event === 'play' || d.event === 'timeupdate') fade();
       } catch {}
     };
     window.addEventListener('message', onMessage);
 
-    // Strategy 2: MutationObserver — as soon as webtor injects its iframe,
-    // give it 15s more (terminal phase) then fade regardless.
+    // Strategy 2: MutationObserver — when webtor injects its iframe, retry
+    // play every 2s (browser may block first attempt) and fade at 20s.
     let iframeTimer: ReturnType<typeof setTimeout> | null = null;
+    let playRetry: ReturnType<typeof setInterval> | null = null;
     const container = document.getElementById(id);
     const observer = container
       ? new MutationObserver(() => {
           if (!iframeTimer && container.querySelector('iframe')) {
-            iframeTimer = setTimeout(fade, 15000);
+            // Retry play every 2s in case first attempt is blocked
+            playRetry = setInterval(tryPlay, 2000);
+            // Fade at most 20s after iframe appears
+            iframeTimer = setTimeout(fade, 20000);
           }
         })
       : null;
     if (observer && container) observer.observe(container, { childList: true, subtree: true });
 
-    // Strategy 3: hard fallback — 25s covers cases where SDK never loads
-    const fallback = setTimeout(fade, 25000);
+    // Strategy 3: hard fallback — 30s covers cases where SDK never loads
+    const fallback = setTimeout(fade, 30000);
 
     return () => {
       clearTimeout(fallback);
       if (iframeTimer) clearTimeout(iframeTimer);
+      if (playRetry) clearInterval(playRetry);
       observer?.disconnect();
       window.removeEventListener('message', onMessage);
       const el = document.getElementById(id);
