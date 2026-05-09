@@ -389,23 +389,30 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
     };
     window.addEventListener('message', onMessage);
 
-    // Strategy 2: MutationObserver — when webtor injects its iframe:
-    //   a) immediately set allow="autoplay" so browser grants autoplay permission
-    //   b) retry play command every 2s
-    //   c) fade at most 20s after iframe appears
+    // Strategy 2: MutationObserver — intercept the SDK-created iframe, replace
+    // it with our own that has allow="autoplay" set BEFORE the src loads.
     let iframeTimer: ReturnType<typeof setTimeout> | null = null;
     let playRetry: ReturnType<typeof setInterval> | null = null;
     const container = document.getElementById(id);
     const observer = container
       ? new MutationObserver(() => {
-          const iframe = container.querySelector('iframe') as HTMLIFrameElement | null;
-          if (!iframeTimer && iframe) {
-            // Grant autoplay permission on the iframe element
-            if (!iframe.allow?.includes('autoplay')) {
-              iframe.allow = 'autoplay; fullscreen';
-            }
+          const sdkIframe = container.querySelector('iframe:not([data-managed])') as HTMLIFrameElement | null;
+          if (!iframeTimer && sdkIframe) {
+            const src = sdkIframe.src;
+            if (!src) return;
+            // Remove SDK iframe and replace with ours that has autoplay from the start
+            sdkIframe.remove();
+            const iframe = document.createElement('iframe');
+            // Append autoplay=1 to URL if not already present
+            iframe.src = src.includes('autoplay') ? src : src + (src.includes('?') ? '&' : '#') + 'autoplay=1';
+            iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+            iframe.style.cssText = 'width:100%;height:100%;border:0;position:absolute;inset:0;';
+            iframe.dataset.managed = 'true';
+            container.appendChild(iframe);
+            // Retry play postMessage every 2s in case player.js is supported
             playRetry = setInterval(tryPlay, 2000);
-            iframeTimer = setTimeout(fade, 20000);
+            // Hard fallback: if player.js play event never fires, fade at 25s
+            iframeTimer = setTimeout(fade, 25000);
           }
         })
       : null;
