@@ -54,8 +54,10 @@ const OVERLAY_CSS = `
   }
   @keyframes bar-fill {
     0%   { width: 3%; }
-    60%  { width: 82%; }
-    100% { width: 3%; }
+    40%  { width: 55%; }
+    70%  { width: 74%; }
+    88%  { width: 84%; }
+    100% { width: 87%; }
   }
   @keyframes bar-shimmer {
     0%   { background-position: 0% 0%; }
@@ -174,7 +176,7 @@ function MarioOverlay({ title, dots, fading, statusText }: { title: string; dots
             height: '100%',
             background: 'linear-gradient(90deg, #e52521 0%, #f4921a 25%, #fbd000 50%, #f4921a 75%, #e52521 100%)',
             backgroundSize: '300% 100%',
-            animation: 'bar-fill 9s ease-in-out infinite, bar-shimmer 2.5s linear infinite',
+            animation: 'bar-fill 40s cubic-bezier(0.1,0.4,0.6,0.9) 1 forwards, bar-shimmer 2.5s linear infinite',
           }} />
         </div>
 
@@ -387,17 +389,22 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
     };
     window.addEventListener('message', onMessage);
 
-    // Strategy 2: MutationObserver — when webtor injects its iframe, retry
-    // play every 2s (browser may block first attempt) and fade at 20s.
+    // Strategy 2: MutationObserver — when webtor injects its iframe:
+    //   a) immediately set allow="autoplay" so browser grants autoplay permission
+    //   b) retry play command every 2s
+    //   c) fade at most 20s after iframe appears
     let iframeTimer: ReturnType<typeof setTimeout> | null = null;
     let playRetry: ReturnType<typeof setInterval> | null = null;
     const container = document.getElementById(id);
     const observer = container
       ? new MutationObserver(() => {
-          if (!iframeTimer && container.querySelector('iframe')) {
-            // Retry play every 2s in case first attempt is blocked
+          const iframe = container.querySelector('iframe') as HTMLIFrameElement | null;
+          if (!iframeTimer && iframe) {
+            // Grant autoplay permission on the iframe element
+            if (!iframe.allow?.includes('autoplay')) {
+              iframe.allow = 'autoplay; fullscreen';
+            }
             playRetry = setInterval(tryPlay, 2000);
-            // Fade at most 20s after iframe appears
             iframeTimer = setTimeout(fade, 20000);
           }
         })
