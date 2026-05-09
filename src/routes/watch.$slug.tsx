@@ -76,7 +76,7 @@ const OVERLAY_CSS = `
 function MarioOverlay({ title, dots, fading, statusText }: { title: string; dots: string; fading: boolean; statusText?: string }) {
   return (
     <div className="absolute inset-0 z-10 overflow-hidden"
-      style={{ transition: 'opacity 0.6s', opacity: fading ? 0 : 1, pointerEvents: fading ? 'none' : 'auto' }}>
+      style={{ transition: 'opacity 0.6s', opacity: fading ? 0 : 1, pointerEvents: 'none' }}>
 
       <style>{OVERLAY_CSS}</style>
 
