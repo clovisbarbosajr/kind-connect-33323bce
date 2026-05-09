@@ -21,7 +21,10 @@ function cleanTitle(t: string): string {
 }
 
 export const Route = createFileRoute("/")({
-  validateSearch: (s) => ({ filter: (s.filter as string) || undefined }),
+  validateSearch: (s) => ({
+    filter: s.filter != null ? String(s.filter) : undefined,
+    q: s.q != null ? String(s.q) : undefined,
+  }),
   component: Index,
 });
 
@@ -70,20 +73,33 @@ function CatalogCard({ item }: { item: any }) {
 }
 
 function Index() {
-  const { filter: filterRaw } = Route.useSearch();
-  const filter = filterRaw ?? '';
+  const { filter: filterRaw, q: urlQ } = Route.useSearch();
+  const filter = filterRaw != null ? String(filterRaw) : '';
   const [titles, setTitles] = useState<any[]>([]);
   const [heroTitles, setHeroTitles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [heroIndex, setHeroIndex] = useState(0);
   const [scrolled, setScrolled] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(urlQ ?? "");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
+  const slugSorted2026 = useRef<any[]>([]);
   const searchDebounce = useRef<any>(null);
   const PAGE_SIZE = 56;
+
+  const extractSlugDate = (slug: string): number => {
+    const m = slug.match(/-(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (!m) return 0;
+    return +new Date(`${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`);
+  };
+
+  // Extracts the film release year embedded in slug (e.g. "turbulencia-2025-07-05-2026" → 2025)
+  const extractSlugYear = (slug: string): number => {
+    const m = slug.match(/-(\d{4})-\d{1,2}-\d{1,2}-\d{4}$/);
+    return m ? parseInt(m[1]) : 0;
+  };
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 40);
@@ -108,6 +124,7 @@ function Index() {
   // Reset titles + page when filter changes
   useEffect(() => {
     setTitles([]);
+    slugSorted2026.current = [];
     setPage(0);
   }, [filter]);
 
@@ -129,12 +146,41 @@ function Index() {
             const { data: tgRows } = await supabase
               .from('title_genres')
               .select('title_id')
-              .in('genre_id', genreIds);
+              .in('genre_id', genreIds)
+              .limit(8000);
             const ids = [...new Set(tgRows?.map((r: any) => r.title_id) || [])];
             titleIds = ids;
           } else {
             titleIds = [];
           }
+        }
+
+        // ── Lançamentos 2026: títulos com data no slug (-DD-MM-2026) ──
+        if (filter === '2026') {
+          if (page === 0) {
+            const { data } = await supabase
+              .from('titles')
+              .select('*')
+              .filter('slug', 'match', '-\\d{1,2}-\\d{1,2}-2026$')
+              .limit(2000);
+            // Only show films where the year in the slug is exactly 2026
+            // e.g. "meu-querido-assassino-2026-07-05-2026" → slug year 2026 ✓
+            //      "turbulencia-2025-07-05-2026"           → slug year 2025 ✗
+            const sorted = [...(data || [])]
+              .filter(t => extractSlugYear(t.slug) === 2026)
+              .sort((a, b) => extractSlugDate(b.slug) - extractSlugDate(a.slug));
+            slugSorted2026.current = sorted;
+            setTitles(sorted.slice(0, PAGE_SIZE));
+            setTotalCount(sorted.length);
+          } else {
+            const chunk = slugSorted2026.current.slice(
+              page * PAGE_SIZE,
+              (page + 1) * PAGE_SIZE
+            );
+            setTitles(prev => [...prev, ...chunk]);
+          }
+          setLoading(false);
+          return;
         }
 
         let q = supabase.from('titles').select('*', { count: 'exact' });
@@ -144,8 +190,12 @@ function Index() {
           q = q.in('id', titleIds);
         } else if (filter === 'movie') q = q.eq('type', 'movie');
         else if (filter === 'series') q = q.eq('type', 'series');
-        else if (filter === 'top') q = q.not('imdb_rating', 'is', null).order('imdb_rating', { ascending: false });
-        else if (filter === '2026') q = q.eq('year', 2026);
+        else if (filter === 'top') {
+          // Year DESC first, then best IMDb within each year
+          q = q.not('imdb_rating', 'is', null)
+            .order('year', { ascending: false, nullsFirst: false })
+            .order('imdb_rating', { ascending: false, nullsFirst: false });
+        }
 
         if (filter !== 'top') {
           q = q.order('year', { ascending: false });
@@ -397,7 +447,7 @@ function Index() {
               : filter === 'movie' ? 'Filmes'
               : filter === 'series' ? 'Séries'
               : filter === 'top' ? 'Top IMDb'
-              : filter === '2026' ? 'Lançamentos 2026'
+              : filter === '2026' ? `Lançamentos 2026 (${totalCount})`
               : 'Catálogo'}
           </h2>
           {!isSearching && (
