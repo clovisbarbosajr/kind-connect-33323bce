@@ -67,32 +67,20 @@ def get_series_to_update() -> list:
         return []
 
 
-def count_episodes_in_db(title_id: int) -> int:
+def count_episodes_in_db(title_id: str) -> int:
     """Count total episodes stored for a title."""
     try:
-        res = (
-            db.table("episodes")
-            .select("id, season_id", count="exact")
-            .eq("season_id",
-                db.table("seasons").select("id").eq("title_id", title_id)
-            )
-            .execute()
-        )
-        return res.count or 0
-    except Exception:
-        # Simpler fallback
-        try:
-            seasons = db.table("seasons").select("id").eq("title_id", title_id).execute()
-            season_ids = [s["id"] for s in (seasons.data or [])]
-            if not season_ids:
-                return 0
-            total = 0
-            for sid in season_ids:
-                ep_res = db.table("episodes").select("id", count="exact").eq("season_id", sid).execute()
-                total += ep_res.count or 0
-            return total
-        except Exception:
+        seasons = db.table("seasons").select("id").eq("title_id", title_id).execute()
+        season_ids = [s["id"] for s in (seasons.data or [])]
+        if not season_ids:
             return 0
+        total = 0
+        for sid in season_ids:
+            ep_res = db.table("episodes").select("id", count="exact").eq("season_id", sid).execute()
+            total += ep_res.count or 0
+        return total
+    except Exception:
+        return 0
 
 
 def scan_for_new_titles(page, existing_slugs: set) -> list:
