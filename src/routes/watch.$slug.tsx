@@ -86,7 +86,7 @@ const OVERLAY_CSS = `
   }
 `;
 
-function MarioOverlay({ title, dots, fading, showTapHint }: { title: string; dots: string; fading: boolean; showTapHint?: boolean; statusText?: string }) {
+function MarioOverlay({ title, dots, fading, showTapHint, tapped }: { title: string; dots: string; fading: boolean; showTapHint?: boolean; tapped?: boolean; statusText?: string }) {
   return (
     <div className="absolute inset-0 z-10 overflow-hidden"
       style={{ transition: 'opacity 0.6s', opacity: fading ? 0 : 1, pointerEvents: 'none' }}>
@@ -149,36 +149,53 @@ function MarioOverlay({ title, dots, fading, showTapHint }: { title: string; dot
         </div>
       ))}
 
-      {/* ── Tap-to-start — aparece só quando webtor play btn estiver pronto ── */}
-      {showTapHint && (
+      {/* ── Centro: 👆 quando pronto / ✅ após toque confirmado ── */}
+      {(showTapHint || tapped) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ zIndex: 5, pointerEvents: 'none' }}>
-          <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              position: 'absolute', top: '50%', left: '50%',
-              width: 90, height: 90, marginTop: -45, marginLeft: -45,
-              borderRadius: '50%',
-              border: '3px solid rgba(255,220,60,0.75)',
-              animation: 'tap-ring 1.5s ease-out infinite',
-            }} />
-            <span style={{
-              fontSize: 'clamp(44px, 7.5vw, 76px)',
-              animation: 'tap-bounce 1.5s ease-in-out infinite',
-              filter: 'drop-shadow(0 0 14px rgba(255,200,60,0.95))',
-              lineHeight: 1,
-            }}>👆</span>
-            <p style={{
-              fontFamily: 'Impact, "Arial Black", monospace',
-              fontWeight: 900,
-              fontSize: 'clamp(12px, 2vw, 22px)',
-              color: '#fbd000',
-              letterSpacing: '0.22em',
-              textTransform: 'uppercase',
-              textAlign: 'center',
-              textShadow: '0 0 18px rgba(255,180,0,0.95), 2px 2px 0 #000',
-              animation: 'tap-label 1.5s ease-in-out infinite',
-              marginTop: 4,
-            }}>TOQUE NA TELA PARA INICIAR</p>
-          </div>
+          {(showTapHint && !tapped) ? (
+            <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                position: 'absolute', top: '50%', left: '50%',
+                width: 90, height: 90, marginTop: -45, marginLeft: -45,
+                borderRadius: '50%',
+                border: '3px solid rgba(255,220,60,0.75)',
+                animation: 'tap-ring 1.5s ease-out infinite',
+              }} />
+              <span style={{
+                fontSize: 'clamp(44px, 7.5vw, 76px)',
+                animation: 'tap-bounce 1.5s ease-in-out infinite',
+                filter: 'drop-shadow(0 0 14px rgba(255,200,60,0.95))',
+                lineHeight: 1,
+              }}>👆</span>
+              <p style={{
+                fontFamily: 'Impact, "Arial Black", monospace',
+                fontWeight: 900,
+                fontSize: 'clamp(12px, 2vw, 22px)',
+                color: '#fbd000',
+                letterSpacing: '0.22em',
+                textTransform: 'uppercase',
+                textAlign: 'center',
+                textShadow: '0 0 18px rgba(255,180,0,0.95), 2px 2px 0 #000',
+                animation: 'tap-label 1.5s ease-in-out infinite',
+                marginTop: 4,
+              }}>TOQUE NA TELA PARA INICIAR</p>
+            </div>
+          ) : tapped ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 'clamp(40px, 6vw, 64px)', filter: 'drop-shadow(0 0 12px rgba(100,255,100,0.9))' }}>✅</span>
+              <p style={{
+                fontFamily: 'Impact, "Arial Black", monospace',
+                fontWeight: 900,
+                fontSize: 'clamp(12px, 2vw, 22px)',
+                color: '#4ade80',
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                textAlign: 'center',
+                textShadow: '0 0 16px rgba(74,222,128,0.9), 2px 2px 0 #000',
+                animation: 'carr-blink 1.2s step-start infinite',
+              }}>AGUARDE... CARREGANDO O FILME</p>
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -373,7 +390,8 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
   const containerId = useRef('wtor' + Date.now().toString(36)).current;
   const [loadingVisible, setLoadingVisible] = useState(true);
   const [loadingFading, setLoadingFading] = useState(false);
-  const [showTapHint, setShowTapHint] = useState(false); // shown only when webtor play btn is ready
+  const [showTapHint, setShowTapHint] = useState(false);   // 👆 shown when webtor play btn ready
+  const [tapped, setTapped]             = useState(false);  // user tapped → show "carregando"
   const [dots, setDots] = useState('');
   const fadeRef = useRef<(() => void) | null>(null);
 
@@ -423,24 +441,32 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
       } catch {}
     };
 
-    // Strategy 1: player.js postMessage
-    // ready   → webtor play button is visible → show tap hint + try autoplay
-    // play    → user clicked play, seeds loading → hide tap hint, keep overlay
-    // timeupdate → video frames moving = movie started → fade overlay
+    // player.js events:
+    // ready      → video player initialized (play btn visible) → show 👆
+    // play       → user clicked play → confirm tapped, hide 👆
+    // timeupdate → frames moving = movie really started → fade overlay
     const onMessage = (e: MessageEvent) => {
       try {
         const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
         if (!d || d.context !== 'player.js') return;
-        if (d.event === 'ready') { setShowTapHint(true); tryPlay(); }
-        if (d.event === 'play')  { setShowTapHint(false); }
-        if (d.event === 'timeupdate') fade();
+        if (d.event === 'ready')      { setShowTapHint(true); tryPlay(); }
+        if (d.event === 'play')       { setShowTapHint(false); setTapped(true); }
+        if (d.event === 'timeupdate') { fade(); }
       } catch {}
     };
     window.addEventListener('message', onMessage);
 
-    // Strategy 2: MutationObserver — intercept the SDK-created iframe, replace
-    // with our own that has allow="autoplay" set BEFORE the src loads.
-    // Does NOT start a fade timer — overlay stays until timeupdate or hard fallback.
+    // window blur = user clicked inside the webtor iframe
+    // Use this as confirmation that the tap was received
+    const onBlur = () => {
+      setShowTapHint(false);
+      setTapped(true);
+    };
+    window.addEventListener('blur', onBlur);
+
+    // MutationObserver: intercept SDK iframe, recreate with allow="autoplay"
+    // Fallback hint: show 👆 after 30s if player.js ready never fires
+    // (webtor terminal phase typically takes 20-30s)
     let iframeDetected = false;
     let playRetry: ReturnType<typeof setInterval> | null = null;
     let hintTimer: ReturnType<typeof setTimeout> | null = null;
@@ -459,17 +485,16 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
             iframe.style.cssText = 'width:100%;height:100%;border:0;position:absolute;inset:0;';
             iframe.dataset.managed = 'true';
             container.appendChild(iframe);
-            // Fallback: show tap hint 3s after iframe appears (if player.js ready never fires)
-            hintTimer = setTimeout(() => setShowTapHint(true), 3000);
-            // Retry play every 2s
+            // Fallback: if player.js ready never fires, show hint after 30s
+            hintTimer = setTimeout(() => setShowTapHint(true), 30000);
             playRetry = setInterval(tryPlay, 2000);
           }
         })
       : null;
     if (observer && container) observer.observe(container, { childList: true, subtree: true });
 
-    // Strategy 3: hard fallback — 45s maximum wait before showing the player
-    const fallback = setTimeout(fade, 45000);
+    // Hard fallback — 90s maximum
+    const fallback = setTimeout(fade, 90000);
 
     return () => {
       clearTimeout(fallback);
@@ -477,6 +502,7 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
       if (playRetry) clearInterval(playRetry);
       observer?.disconnect();
       window.removeEventListener('message', onMessage);
+      window.removeEventListener('blur', onBlur);
       const el = document.getElementById(id);
       if (el) el.innerHTML = '';
     };
@@ -504,7 +530,7 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
       <div className="flex-1 w-full relative" style={{ minHeight: 0 }}>
         <div id={containerId} className="absolute inset-0" />
         {loadingVisible && (
-          <MarioOverlay title={title} dots={dots} fading={loadingFading} showTapHint={showTapHint} />
+          <MarioOverlay title={title} dots={dots} fading={loadingFading} showTapHint={showTapHint} tapped={tapped} />
         )}
       </div>
     </div>
