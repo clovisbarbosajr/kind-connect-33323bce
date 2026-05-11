@@ -424,53 +424,51 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
     };
 
     // Strategy 1: player.js postMessage
-    // - 'ready' = player initialized → send play command, keep overlay
-    // - 'play'/'timeupdate' = video actually running → fade overlay
+    // - 'ready' = player initialized → send play command, overlay STAYS
+    // - 'play' alone can fire during init → ignore it, only trust timeupdate
+    // - 'timeupdate' = video frames actually progressing → fade overlay
     const onMessage = (e: MessageEvent) => {
       try {
         const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
         if (!d || d.context !== 'player.js') return;
         if (d.event === 'ready') tryPlay();
-        if (d.event === 'play' || d.event === 'timeupdate') fade();
+        if (d.event === 'timeupdate') fade(); // real playback confirmed
       } catch {}
     };
     window.addEventListener('message', onMessage);
 
     // Strategy 2: MutationObserver — intercept the SDK-created iframe, replace
-    // it with our own that has allow="autoplay" set BEFORE the src loads.
-    let iframeTimer: ReturnType<typeof setTimeout> | null = null;
+    // with our own that has allow="autoplay" set BEFORE the src loads.
+    // Does NOT start a fade timer — overlay stays until timeupdate or hard fallback.
+    let iframeDetected = false;
     let playRetry: ReturnType<typeof setInterval> | null = null;
     const container = document.getElementById(id);
     const observer = container
       ? new MutationObserver(() => {
           const sdkIframe = container.querySelector('iframe:not([data-managed])') as HTMLIFrameElement | null;
-          if (!iframeTimer && sdkIframe) {
+          if (!iframeDetected && sdkIframe) {
+            iframeDetected = true;
             const src = sdkIframe.src;
             if (!src) return;
-            // Remove SDK iframe and replace with ours that has autoplay from the start
             sdkIframe.remove();
             const iframe = document.createElement('iframe');
-            // Append autoplay=1 to URL if not already present
             iframe.src = src.includes('autoplay') ? src : src + (src.includes('?') ? '&' : '#') + 'autoplay=1';
             iframe.allow = 'autoplay; fullscreen; picture-in-picture';
             iframe.style.cssText = 'width:100%;height:100%;border:0;position:absolute;inset:0;';
             iframe.dataset.managed = 'true';
             container.appendChild(iframe);
-            // Retry play postMessage every 2s in case player.js is supported
+            // Keep retrying play command every 2s
             playRetry = setInterval(tryPlay, 2000);
-            // Hard fallback: if player.js play event never fires, fade at 25s
-            iframeTimer = setTimeout(fade, 25000);
           }
         })
       : null;
     if (observer && container) observer.observe(container, { childList: true, subtree: true });
 
-    // Strategy 3: hard fallback — 30s covers cases where SDK never loads
-    const fallback = setTimeout(fade, 30000);
+    // Strategy 3: hard fallback — 45s maximum wait before showing the player
+    const fallback = setTimeout(fade, 45000);
 
     return () => {
       clearTimeout(fallback);
-      if (iframeTimer) clearTimeout(iframeTimer);
       if (playRetry) clearInterval(playRetry);
       observer?.disconnect();
       window.removeEventListener('message', onMessage);
