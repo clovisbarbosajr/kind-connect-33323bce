@@ -20,7 +20,7 @@ const STAR_COLORS   = ['#ffd700','#ffe040','#ffb020','#ffc040','#ffe860','#ffda3
 const OVERLAY_CSS = `
   @keyframes bg-breathe {
     0%,100% { transform: scale(1); }
-    50% { transform: scale(1.025); }
+    50% { transform: scale(1.008); }
   }
   @keyframes mario-bob {
     0%,100% { transform: translateY(0) rotate(0deg); }
@@ -94,7 +94,7 @@ function MarioOverlay({ title, dots, fading, showTapHint, tapped }: { title: str
       <style>{OVERLAY_CSS}</style>
 
       {/* Background image (breathing) */}
-      <div className="absolute inset-0" style={{ animation: 'bg-breathe 4s ease-in-out infinite', transformOrigin: 'center center' }}>
+      <div className="absolute inset-0" style={{ animation: 'bg-breathe 4s ease-in-out infinite', transformOrigin: 'center center', willChange: 'transform' }}>
         <img src="/mario-bg.jpg" alt="" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: 'center top' }} />
       </div>
 
@@ -449,20 +449,18 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
       try {
         const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
         if (!d || d.context !== 'player.js') return;
-        if (d.event === 'ready')      { setShowTapHint(true); tryPlay(); }
-        if (d.event === 'play')       { setShowTapHint(false); setTapped(true); }
-        if (d.event === 'timeupdate') { fade(); }
+        if (d.event === 'ready')      {
+          setShowTapHint(true);
+          tryPlay();
+          // After 5s showing 👆, auto-switch to "AGUARDANDO" (user likely tapped)
+          setTimeout(() => { setShowTapHint(false); setTapped(true); }, 5000);
+        }
+        if (d.event === 'play')       { setShowTapHint(false); setTapped(true); } // player.js play confirmed
+        if (d.event === 'timeupdate') { fade(); }                                  // frames moving = film started
       } catch {}
     };
     window.addEventListener('message', onMessage);
 
-    // window blur = user clicked inside the webtor iframe
-    // Use this as confirmation that the tap was received
-    const onBlur = () => {
-      setShowTapHint(false);
-      setTapped(true);
-    };
-    window.addEventListener('blur', onBlur);
 
     // MutationObserver: intercept SDK iframe, recreate with allow="autoplay"
     // Fallback hint: show 👆 after 30s if player.js ready never fires
@@ -486,7 +484,11 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
             iframe.dataset.managed = 'true';
             container.appendChild(iframe);
             // Fallback: if player.js ready never fires, show hint after 30s
-            hintTimer = setTimeout(() => setShowTapHint(true), 30000);
+            hintTimer = setTimeout(() => {
+              setShowTapHint(true);
+              // After 5s showing the 👆, auto-switch to "AGUARDANDO" so user knows it registered
+              setTimeout(() => { setShowTapHint(false); setTapped(true); }, 5000);
+            }, 30000);
             playRetry = setInterval(tryPlay, 2000);
           }
         })
@@ -502,7 +504,6 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
       if (playRetry) clearInterval(playRetry);
       observer?.disconnect();
       window.removeEventListener('message', onMessage);
-      window.removeEventListener('blur', onBlur);
       const el = document.getElementById(id);
       if (el) el.innerHTML = '';
     };
