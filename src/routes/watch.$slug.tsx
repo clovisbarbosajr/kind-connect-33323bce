@@ -18,9 +18,9 @@ const POPCORN_COLORS = ['#f8d878','#f0b820','#fce8a0','#e8a800','#fff0b0','#f4c8
 const STAR_COLORS   = ['#ffd700','#ffe040','#ffb020','#ffc040','#ffe860','#ffda30'];
 
 const OVERLAY_CSS = `
-  @keyframes bg-breathe {
+  @keyframes overlay-dim {
     0%,100% { opacity: 1; }
-    50% { opacity: 0.93; }
+    50% { opacity: 0.94; }
   }
   @keyframes mario-bob {
     0%,100% { transform: translateY(0) rotate(0deg); }
@@ -94,12 +94,13 @@ function MarioOverlay({ title, dots, fading, showTapHint, tapped, onTap }: { tit
       <style>{OVERLAY_CSS}</style>
 
       {/* Background image (breathing) */}
-      <div className="absolute inset-0" style={{ animation: 'bg-breathe 4s ease-in-out infinite' }}>
-        <img src="/mario-bg.jpg" alt="" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: 'center top' }} />
+      {/* Background — GPU-composited layer for pixel-perfect rendering, no scale */}
+      <div className="absolute inset-0" style={{ transform: 'translateZ(0)', willChange: 'transform' }}>
+        <img src="/mario-bg.jpg" alt="" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: 'center top', imageRendering: 'auto' }} />
       </div>
 
-      {/* Dark gradient overlay */}
-      <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.05) 55%, rgba(0,0,0,0.72) 82%, rgba(0,0,0,0.88) 100%)' }} />
+      {/* Dark gradient overlay — subtle breathing on this layer, NOT on the image */}
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.05) 55%, rgba(0,0,0,0.72) 82%, rgba(0,0,0,0.88) 100%)', animation: 'overlay-dim 4s ease-in-out infinite' }} />
 
       {/* Mario zone (center-left) — gentle bob + warm glow */}
       <div className="absolute" style={{ left: '32%', top: '12%', width: '19%', height: '72%', animation: 'mario-bob 1.6s ease-in-out infinite', transformOrigin: 'bottom center', zIndex: 2 }}>
@@ -421,8 +422,8 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
       setTimeout(() => setLoadingVisible(false), 600);
     };
 
-    // Show 👆 hint after 15s if "torrent fetched" event hasn't fired yet
-    const hintTimer = setTimeout(() => setShowTapHint(true), 15000);
+    // Show 👆 hint after 25s if "torrent fetched" event hasn't fired yet
+    const hintTimer = setTimeout(() => setShowTapHint(true), 25000);
 
     // Hard fallback — 120s maximum so overlay never gets stuck forever
     const hardFallback = setTimeout(fade, 120000);
@@ -443,8 +444,9 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
 
         const name: string = event.name || '';
 
-        // Torrent metadata received → play button is about to appear
-        if (name === 'torrent fetched' || name === 'inited') {
+        // Torrent metadata received → play button is now visible in webtor
+        // NOTE: "inited" fires too early (player init, no torrent yet) — ignore it
+        if (name === 'torrent fetched') {
           clearTimeout(hintTimer);
           setShowTapHint(true);
         }
