@@ -503,20 +503,12 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
     const dnMatch   = magnet.match(/[?&]dn=([^&]+)/i);
     const dn        = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : '';
 
-    // YTS video file path: "{dn}/{dn}.mp4"
+    // YTS video file path: "{dn}/{dn}.mp4" — tells webtor which file to play without scanning the torrent
     const path = dn ? `${dn}/${dn}.mp4` : undefined;
 
-    // YTS subtitle files live at: "{dn}/Subs/{filename}"
-    // The webtor iframe is same-origin with webtor.io → can fetch these URLs with the session cookie.
-    // If a file doesn't exist in the torrent webtor silently ignores it.
-    const subUrl = (filename: string) =>
-      `https://webtor.io/${infoHash}/${encodeURIComponent(dn + '/Subs/' + filename)}`;
-
-    const subtitles = (infoHash && dn) ? [
-      { src: subUrl('CC.eng.srt'),                 srclang: 'en', label: 'English'   },
-      { src: subUrl('Latin American.spa.srt'),      srclang: 'es', label: 'Español'   },
-      { src: subUrl('Canadian.fre.srt'),            srclang: 'fr', label: 'Français'  },
-    ] : undefined;
+    // NOTE: subtitles via webtor.io URLs were removed — they require authenticated requests
+    // inside the iframe which fail on mobile (third-party cookie restrictions → CSRF error).
+    // Webtor's built-in CC button still works for users who need subtitles.
 
     // Inject iframe fill-style
     const styleEl = document.createElement('style');
@@ -534,9 +526,8 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
       height: '100%',
       autoplay: true,
     };
-    if (poster)    cfg.poster    = poster;
-    if (path)      cfg.path      = path;
-    if (subtitles) cfg.subtitles = subtitles;
+    if (poster) cfg.poster = poster;
+    if (path)   cfg.path   = path;
 
     (window as any).webtor = [cfg];
     const script = document.createElement('script');
@@ -636,23 +627,7 @@ function Watch() {
   const toggleSeason = (n: number) =>
     setOpenSeasons(prev => { const s = new Set(prev); s.has(n) ? s.delete(n) : s.add(n); return s; });
 
-  const openOnline = (magnet: string) => {
-    // Mobile browsers (Safari iOS, Chrome Android) block third-party cookies in iframes.
-    // Webtor.io relies on session cookies for CSRF validation → iframe embed always fails on mobile.
-    // Fix: open webtor.io directly in a new tab (first-party context → cookies work fine).
-    const isMobile = /Android|iPhone|iPad|iPod|IEMobile/i.test(navigator.userAgent);
-    if (isMobile) {
-      const enriched = injectTrackers(magnet);
-      const dnMatch  = magnet.match(/[?&]dn=([^&]+)/i);
-      const dn       = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : '';
-      const path     = dn ? `${dn}/${dn}.mp4` : '';
-      let url = `https://webtor.io/show?magnet=${encodeURIComponent(enriched)}`;
-      if (path) url += `&file=${encodeURIComponent(path)}`;
-      window.open(url, '_blank');
-      return;
-    }
-    setStreamMagnet(magnet);
-  };
+  const openOnline = (magnet: string) => setStreamMagnet(magnet);
 
   const downloadTorrent = (magnet: string) => {
     if (magnet.startsWith('https://')) window.open(magnet, '_blank');
