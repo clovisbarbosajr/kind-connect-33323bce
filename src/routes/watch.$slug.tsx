@@ -19,8 +19,8 @@ const STAR_COLORS   = ['#ffd700','#ffe040','#ffb020','#ffc040','#ffe860','#ffda3
 
 const OVERLAY_CSS = `
   @keyframes bg-breathe {
-    0%,100% { transform: scale(1); }
-    50% { transform: scale(1.008); }
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.93; }
   }
   @keyframes mario-bob {
     0%,100% { transform: translateY(0) rotate(0deg); }
@@ -94,7 +94,7 @@ function MarioOverlay({ title, dots, fading, showTapHint, tapped, onTap }: { tit
       <style>{OVERLAY_CSS}</style>
 
       {/* Background image (breathing) */}
-      <div className="absolute inset-0" style={{ animation: 'bg-breathe 4s ease-in-out infinite', transformOrigin: 'center center', willChange: 'transform' }}>
+      <div className="absolute inset-0" style={{ animation: 'bg-breathe 4s ease-in-out infinite' }}>
         <img src="/mario-bg.jpg" alt="" className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: 'center top' }} />
       </div>
 
@@ -477,6 +477,8 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
     return () => {
       clearTimeout(hintTimer);
       clearTimeout(hardFallback);
+      fadedRef.current = true; // prevent any pending callbacks from firing
+      playerRef.current = null;
       const el = document.getElementById(id);
       if (el) el.innerHTML = '';
     };
