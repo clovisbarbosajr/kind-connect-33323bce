@@ -383,7 +383,7 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
 
         {/* Mario overlay — covers video until canplay fires */}
         {loadingVisible && (
-          <MarioOverlay title={title} dots={dots} fading={loadingFading} statusText={status} />
+          <MarioOverlay title={title} dots={dots} fading={loadingFading} />
         )}
       </div>
     </div>
@@ -394,145 +394,43 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
 // SDK flow: push config → SDK creates iframe → iframe sends "init" → SDK sends back magnet
 // Events fired: "torrent fetched" → "play_clicked" → "current time" (each second of playback)
 function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string; title: string; poster?: string; onClose: () => void }) {
-  const containerId = useRef('wtor' + Date.now().toString(36)).current;
-  const [loadingVisible, setLoadingVisible] = useState(true);
-  const [loadingFading, setLoadingFading] = useState(false);
-  const [showTapHint, setShowTapHint] = useState(false);
-  const [tapped, setTapped]           = useState(false);
-  const [dots, setDots]               = useState('');
-  const playerRef  = useRef<any>(null);
-  const fadedRef   = useRef(false);
-
-  // User taps the 👆 overlay → show ✅ briefly then reveal webtor player
-  // We do NOT call player.play() via postMessage — Brave/Chrome blocks autoplay
-  // triggered from parent-frame postMessage. Instead we fade the overlay so
-  // the user can click directly on the webtor iframe (counts as user gesture).
-  const handleTap = () => {
-    if (tapped) return;
-    setShowTapHint(false);
-    setTapped(true);
-    // Fade after 1.2s so user sees ✅ feedback, then overlay disappears
-    setTimeout(() => {
-      if (fadedRef.current) return;
-      fadedRef.current = true;
-      setLoadingFading(true);
-      setTimeout(() => setLoadingVisible(false), 600);
-    }, 1200);
-  };
+  // Stable unique id for this modal instance
+  const cid = useRef('wt' + Math.random().toString(36).slice(2, 8)).current;
 
   useEffect(() => {
-    const id = containerId;
-    fadedRef.current = false;
+    // Inject iframe fill-style once into <head>
+    const styleEl = document.createElement('style');
+    styleEl.id = cid + '_s';
+    styleEl.textContent = `#${cid}{position:relative}#${cid} iframe{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;border:0!important}`;
+    document.head.appendChild(styleEl);
 
-    const fade = () => {
-      if (fadedRef.current) return;
-      fadedRef.current = true;
-      setLoadingFading(true);
-      setTimeout(() => setLoadingVisible(false), 600);
-    };
-
-    // Show 👆 hint after 8s — overlay fades automatically after 10s
-    const hintTimer = setTimeout(() => setShowTapHint(true), 8000);
-
-    // Auto-fade: 10s after open the overlay disappears and webtor player shows
-    const hardFallback = setTimeout(fade, 10000);
-
-    // ── Force a FRESH SDK init every time ────────────────────────────────
-    // Problem: the SDK script stays in <head> across SPA navigations, so
-    // window.webtor becomes the SDK's internal generator.  If we just push()
-    // to that generator the SDK may not re-scan the DOM for the new container.
-    // Solution: remove the old script element, reset window.webtor to a plain
-    // array pre-loaded with our config, then add a fresh <script> tag.
-    // The browser serves the script from cache (< 10 ms), so there is no
-    // perceptible delay — but the SDK re-executes and picks up the new entry.
-    const oldScript = document.querySelector(`script[src="${WEBTOR_SDK}"]`);
-    if (oldScript) oldScript.remove();
-
-    (window as any).webtor = [{
-      id,
-      magnet,
-      lang: 'pt',
-      width: '100%',
-      height: '100%',
-      autoplay: true,
-      on: (event: any) => {
-        // Capture the Player object so we can call .play() programmatically
-        if (event.player && !playerRef.current) playerRef.current = event.player;
-
-        const name: string = event.name || '';
-
-        // Torrent metadata received → play button is visible in webtor player
-        if (name === 'torrent fetched') {
-          clearTimeout(hintTimer);
-          setShowTapHint(true);
-        }
-
-        // Play button clicked (by user OR our .play() call)
-        if (name === 'play_clicked') {
-          setShowTapHint(false);
-          setTapped(true);
-        }
-
-        // Video is actually playing → fade overlay
-        if (name === 'current time' && typeof event.data === 'number' && event.data > 0) {
-          setTimeout(fade, 300);
-        }
-        if (name === 'player status' && event.data?.status === 'playing') {
-          setTimeout(fade, 300);
-        }
-      },
-    }];
-
-    const s = document.createElement('script');
-    s.src = WEBTOR_SDK;
-    s.charset = 'utf-8';
-    document.head.appendChild(s);
+    // Fresh SDK init: remove old script so it re-executes from cache
+    document.querySelectorAll(`script[src="${WEBTOR_SDK}"]`).forEach(s => s.remove());
+    (window as any).webtor = [{ id: cid, magnet, lang: 'pt', width: '100%', height: '100%', autoplay: true }];
+    const script = document.createElement('script');
+    script.src = WEBTOR_SDK;
+    document.head.appendChild(script);
 
     return () => {
-      clearTimeout(hintTimer);
-      clearTimeout(hardFallback);
-      fadedRef.current = true;   // block any pending fade callbacks
-      playerRef.current = null;
-      // Strip the id so the SDK can't re-adopt this element after unmount
-      const el = document.getElementById(id);
-      if (el) {
-        el.removeAttribute('id');
-        el.innerHTML = '';
-      }
+      // Clean up on unmount
+      document.getElementById(cid + '_s')?.remove();
+      const el = document.getElementById(cid);
+      if (el) el.innerHTML = '';
     };
-  }, [magnet, containerId]);
-
-  useEffect(() => {
-    if (!loadingVisible) return;
-    const t = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 500);
-    return () => clearInterval(t);
-  }, [loadingVisible]);
+  }, []);  // run once on mount
 
   return (
-    <div className="fixed inset-0 bg-black z-[999999] flex flex-col" style={{ isolation: 'isolate' }}>
+    <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 999999, display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-zinc-900/95 border-b border-zinc-800 flex-shrink-0">
-        <p className="text-white text-sm font-bold truncate flex-1 mr-3">{title}</p>
-        <button onClick={onClose}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-red-900 text-white text-xs rounded transition flex-shrink-0">
-          <X className="w-3 h-3" /> Fechar
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#18181b', borderBottom: '1px solid #27272a', flexShrink: 0 }}>
+        <span style={{ color: '#fff', fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 12 }}>{title}</span>
+        <button onClick={onClose} style={{ background: '#3f3f46', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+          ✕ Fechar
         </button>
       </div>
 
-      <style>{`#${containerId} { position:relative; } #${containerId} iframe { position:absolute!important; inset:0!important; width:100%!important; height:100%!important; border:0!important; }`}</style>
-
-      <div className="flex-1 w-full relative" style={{ minHeight: 0 }}>
-        <div id={containerId} className="absolute inset-0" />
-        {loadingVisible && (
-          <MarioOverlay
-            title={title}
-            dots={dots}
-            fading={loadingFading}
-            showTapHint={showTapHint && !tapped}
-            tapped={tapped}
-            onTap={handleTap}
-          />
-        )}
+      <div style={{ flex: 1, position: 'relative', minHeight: 0, overflow: 'hidden' }}>
+        <div id={cid} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }} />
       </div>
     </div>
   );
