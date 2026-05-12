@@ -403,12 +403,21 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
   const playerRef  = useRef<any>(null);   // webtor Player object — exposes .play()
   const fadedRef   = useRef(false);
 
-  // User taps the 👆 overlay → programmatically trigger play + show ✅
+  // User taps the 👆 overlay → show ✅ briefly then reveal webtor player
+  // We do NOT call player.play() via postMessage — Brave/Chrome blocks autoplay
+  // triggered from parent-frame postMessage. Instead we fade the overlay so
+  // the user can click directly on the webtor iframe (counts as user gesture).
   const handleTap = () => {
     if (tapped) return;
     setShowTapHint(false);
     setTapped(true);
-    try { playerRef.current?.play(); } catch {}
+    // Fade after 1.2s so user sees ✅ feedback, then overlay disappears
+    setTimeout(() => {
+      if (fadedRef.current) return;
+      fadedRef.current = true;
+      setLoadingFading(true);
+      setTimeout(() => setLoadingVisible(false), 600);
+    }, 1200);
   };
 
   useEffect(() => {
