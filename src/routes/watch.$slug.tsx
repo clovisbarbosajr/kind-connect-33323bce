@@ -636,7 +636,23 @@ function Watch() {
   const toggleSeason = (n: number) =>
     setOpenSeasons(prev => { const s = new Set(prev); s.has(n) ? s.delete(n) : s.add(n); return s; });
 
-  const openOnline = (magnet: string) => setStreamMagnet(magnet);
+  const openOnline = (magnet: string) => {
+    // Mobile browsers (Safari iOS, Chrome Android) block third-party cookies in iframes.
+    // Webtor.io relies on session cookies for CSRF validation → iframe embed always fails on mobile.
+    // Fix: open webtor.io directly in a new tab (first-party context → cookies work fine).
+    const isMobile = /Android|iPhone|iPad|iPod|IEMobile/i.test(navigator.userAgent);
+    if (isMobile) {
+      const enriched = injectTrackers(magnet);
+      const dnMatch  = magnet.match(/[?&]dn=([^&]+)/i);
+      const dn       = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : '';
+      const path     = dn ? `${dn}/${dn}.mp4` : '';
+      let url = `https://webtor.io/show?magnet=${encodeURIComponent(enriched)}`;
+      if (path) url += `&file=${encodeURIComponent(path)}`;
+      window.open(url, '_blank');
+      return;
+    }
+    setStreamMagnet(magnet);
+  };
 
   const downloadTorrent = (magnet: string) => {
     if (magnet.startsWith('https://')) window.open(magnet, '_blank');
