@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as DebugRouteImport } from './routes/debug'
+import { Route as BlankRouteImport } from './routes/blank'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WatchSlugRouteImport } from './routes/watch.$slug'
@@ -17,6 +18,11 @@ import { Route as WatchSlugRouteImport } from './routes/watch.$slug'
 const DebugRoute = DebugRouteImport.update({
   id: '/debug',
   path: '/debug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BlankRoute = BlankRouteImport.update({
+  id: '/blank',
+  path: '/blank',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -38,12 +44,14 @@ const WatchSlugRoute = WatchSlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/blank': typeof BlankRoute
   '/debug': typeof DebugRoute
   '/watch/$slug': typeof WatchSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/blank': typeof BlankRoute
   '/debug': typeof DebugRoute
   '/watch/$slug': typeof WatchSlugRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/blank': typeof BlankRoute
   '/debug': typeof DebugRoute
   '/watch/$slug': typeof WatchSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/debug' | '/watch/$slug'
+  fullPaths: '/' | '/admin' | '/blank' | '/debug' | '/watch/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/debug' | '/watch/$slug'
-  id: '__root__' | '/' | '/admin' | '/debug' | '/watch/$slug'
+  to: '/' | '/admin' | '/blank' | '/debug' | '/watch/$slug'
+  id: '__root__' | '/' | '/admin' | '/blank' | '/debug' | '/watch/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  BlankRoute: typeof BlankRoute
   DebugRoute: typeof DebugRoute
   WatchSlugRoute: typeof WatchSlugRoute
 }
@@ -76,6 +86,13 @@ declare module '@tanstack/react-router' {
       path: '/debug'
       fullPath: '/debug'
       preLoaderRoute: typeof DebugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blank': {
+      id: '/blank'
+      path: '/blank'
+      fullPath: '/blank'
+      preLoaderRoute: typeof BlankRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  BlankRoute: BlankRoute,
   DebugRoute: DebugRoute,
   WatchSlugRoute: WatchSlugRoute,
 }
