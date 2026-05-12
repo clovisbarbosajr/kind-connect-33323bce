@@ -32,7 +32,7 @@ const GENRES = ['Ação', 'Animação', 'Aventura', 'Biografia', 'Comédia', 'Cr
 
 function CatalogCard({ item }: { item: any }) {
   return (
-    <div className="box-border w-1/2 sm:w-1/3 md:w-1/4 lg:w-1/5 xl:w-[14.28%] mb-4 px-[5px]">
+    <div>
       <Link to="/watch/$slug" params={{ slug: item.slug }} className="block group">
         <div className="relative rounded-lg overflow-hidden bg-[#0e1723]" style={{ paddingTop: '150%' }}>
           <img
@@ -437,7 +437,7 @@ function Index() {
       )}
 
       {/* ── CATALOG ── */}
-      <main className="px-4 lg:px-8 pb-20" style={{ paddingTop: isSearching ? '88px' : '0' }}>
+      <main className="px-3 sm:px-4 lg:px-8 pb-20" style={{ paddingTop: isSearching ? '80px' : '0' }}>
         <div className="flex items-center gap-1 flex-wrap" style={{ margin: '1.2em 0 1em' }}>
           <h2 className="font-semibold text-white/80 mr-3" style={{ fontSize: '1.1em' }}>
             {isSearching
@@ -474,11 +474,11 @@ function Index() {
           )}
         </div>
 
-        {/* Grid */}
-        <div className="flex flex-wrap" style={{ margin: '0 -5px' }}>
+        {/* Grid — CSS grid (sem negative margins, sem overflow mobile) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-x-2 gap-y-4">
           {(loading && titles.length === 0) || (isSearching && searchLoading)
             ? Array.from({ length: 14 }).map((_, i) => (
-                <div key={i} className="w-1/2 sm:w-1/3 md:w-1/4 lg:w-1/5 xl:w-[14.28%] mb-4 px-[5px]">
+                <div key={i}>
                   <div className="rounded-lg overflow-hidden bg-[#161616]" style={{ paddingTop: '150%' }} />
                   <div className="h-2.5 w-3/4 bg-[#1e1e1e] mt-1.5 rounded" />
                 </div>
@@ -486,7 +486,7 @@ function Index() {
             : catalogTitles.length > 0
             ? catalogTitles.map(item => <CatalogCard key={item.id} item={item} />)
             : (
-              <div className="w-full py-24 text-center text-white/25 text-sm uppercase tracking-widest font-semibold">
+              <div className="col-span-full py-24 text-center text-white/25 text-sm uppercase tracking-widest font-semibold">
                 {isSearching ? 'Nenhum resultado encontrado' : 'Nenhum título encontrado'}
               </div>
             )
