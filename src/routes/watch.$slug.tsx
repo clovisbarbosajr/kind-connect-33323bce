@@ -422,16 +422,24 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
       setTimeout(() => setLoadingVisible(false), 600);
     };
 
-    // Show 👆 hint after 25s if "torrent fetched" event hasn't fired yet
-    const hintTimer = setTimeout(() => setShowTapHint(true), 25000);
+    // Show 👆 hint after 15s if "torrent fetched" hasn't fired yet
+    const hintTimer = setTimeout(() => setShowTapHint(true), 15000);
 
     // Hard fallback — 120s maximum so overlay never gets stuck forever
     const hardFallback = setTimeout(fade, 120000);
 
-    // Push config to webtor SDK — the `on` callback receives ALL events
-    // The SDK will create the iframe itself via its own init handshake
-    (window as any).webtor = (window as any).webtor || [];
-    (window as any).webtor.push({
+    // ── Force a FRESH SDK init every time ────────────────────────────────
+    // Problem: the SDK script stays in <head> across SPA navigations, so
+    // window.webtor becomes the SDK's internal generator.  If we just push()
+    // to that generator the SDK may not re-scan the DOM for the new container.
+    // Solution: remove the old script element, reset window.webtor to a plain
+    // array pre-loaded with our config, then add a fresh <script> tag.
+    // The browser serves the script from cache (< 10 ms), so there is no
+    // perceptible delay — but the SDK re-executes and picks up the new entry.
+    const oldScript = document.querySelector(`script[src="${WEBTOR_SDK}"]`);
+    if (oldScript) oldScript.remove();
+
+    (window as any).webtor = [{
       id,
       magnet,
       lang: 'pt',
@@ -444,20 +452,19 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
 
         const name: string = event.name || '';
 
-        // Torrent metadata received → play button is now visible in webtor
-        // NOTE: "inited" fires too early (player init, no torrent yet) — ignore it
+        // Torrent metadata received → play button is visible in webtor player
         if (name === 'torrent fetched') {
           clearTimeout(hintTimer);
           setShowTapHint(true);
         }
 
-        // Play button was clicked (by user OR our .play() call)
+        // Play button clicked (by user OR our .play() call)
         if (name === 'play_clicked') {
           setShowTapHint(false);
           setTapped(true);
         }
 
-        // Video is actually playing — fade the overlay
+        // Video is actually playing → fade overlay
         if (name === 'current time' && typeof event.data === 'number' && event.data > 0) {
           setTimeout(fade, 300);
         }
@@ -465,24 +472,24 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
           setTimeout(fade, 300);
         }
       },
-    });
+    }];
 
-    // Load SDK if not yet present; if already loaded window.webtor is the
-    // generator so our push above already called WebtorGenerator.push()
-    if (!document.querySelector(`script[src="${WEBTOR_SDK}"]`)) {
-      const s = document.createElement('script');
-      s.src = WEBTOR_SDK;
-      s.charset = 'utf-8';
-      document.head.appendChild(s);
-    }
+    const s = document.createElement('script');
+    s.src = WEBTOR_SDK;
+    s.charset = 'utf-8';
+    document.head.appendChild(s);
 
     return () => {
       clearTimeout(hintTimer);
       clearTimeout(hardFallback);
-      fadedRef.current = true; // prevent any pending callbacks from firing
+      fadedRef.current = true;   // block any pending fade callbacks
       playerRef.current = null;
+      // Strip the id so the SDK can't re-adopt this element after unmount
       const el = document.getElementById(id);
-      if (el) el.innerHTML = '';
+      if (el) {
+        el.removeAttribute('id');
+        el.innerHTML = '';
+      }
     };
   }, [magnet, containerId]);
 
