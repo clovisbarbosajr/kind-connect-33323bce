@@ -269,15 +269,37 @@ const WS_TRACKERS = [
 ];
 const VIDEO_EXTS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.m4v', '.ts'];
 
+const SUB_EXTS = ['.srt', '.vtt'];
+
+function srtToVtt(srt: string): string {
+  return 'WEBVTT\n\n' + srt
+    .replace(/\r\n/g, '\n')
+    .replace(/^\d+\s*\n/gm, '')
+    .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
+    .trim();
+}
+
+function getLangFromName(name: string): { srclang: string; label: string } {
+  const n = name.toLowerCase();
+  if (/\bpt\b|\bpor\b|\bpt-br\b|portugu|brasil/.test(n)) return { srclang: 'pt', label: 'Português' };
+  if (/\beng\b|english|cc\.eng/.test(n)) return { srclang: 'en', label: 'English' };
+  if (/\bspa\b|spanish|latin/.test(n)) return { srclang: 'es', label: 'Español' };
+  if (/\bfre\b|french|fran/.test(n)) return { srclang: 'fr', label: 'Français' };
+  if (/\bdeu\b|german/.test(n)) return { srclang: 'de', label: 'Deutsch' };
+  if (/\bita\b|italian/.test(n)) return { srclang: 'it', label: 'Italiano' };
+  return { srclang: 'en', label: name.replace(/\.(srt|vtt)$/i, '') };
+}
+
 function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: string; poster?: string; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const clientRef = useRef<any>(null);
+  const subUrlsRef = useRef<string[]>([]);
   const [loadingVisible, setLoadingVisible] = useState(true);
   const [loadingFading, setLoadingFading] = useState(false);
   const [dots, setDots] = useState('');
   const [status, setStatus] = useState('Conectando aos peers...');
 
-  // Register canplay listener immediately on mount (before WebTorrent sets src)
+  // Register canplay listener immediately on mount
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -289,7 +311,7 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
     return () => video.removeEventListener('canplay', onCanPlay);
   }, []);
 
-  // Load WebTorrent and start streaming
+  // Load WebTorrent, stream video, and load subtitles from torrent
   useEffect(() => {
     let cancelled = false;
 
@@ -309,18 +331,18 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
       const client = new WT();
       clientRef.current = client;
 
-      // Append WS trackers so browser peers can connect
       const extraTrackers = WS_TRACKERS.map(t => `&tr=${encodeURIComponent(t)}`).join('');
       const magnetWithTrackers = magnet + extraTrackers;
 
       client.on('error', (err: any) => {
-        if (!cancelled) setStatus('Erro WebTorrent: ' + (err?.message || String(err)));
+        if (!cancelled) setStatus('Erro: ' + (err?.message || String(err)));
       });
 
       client.add(magnetWithTrackers, { announce: WS_TRACKERS }, (torrent: any) => {
         if (cancelled) return;
         setStatus('Torrent encontrado! Buscando vídeo...');
 
+        // Find main video file (largest by size)
         const file = torrent.files
           .filter((f: any) => VIDEO_EXTS.some(ext => f.name.toLowerCase().endsWith(ext)))
           .sort((a: any, b: any) => b.length - a.length)[0];
@@ -330,16 +352,49 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
           return;
         }
 
-        setStatus('Iniciando fluxo de vídeo...');
-        // renderTo sets src on the video element and triggers canplay when buffered enough
+        setStatus('Iniciando stream...');
         file.renderTo(videoRef.current, { autoplay: true }, (err: any) => {
-          if (err && !cancelled) setStatus('Erro ao carregar: ' + err.message);
+          if (err && !cancelled) setStatus('Erro: ' + err.message);
         });
+
+        // ── Load subtitle files from within the torrent ──
+        const subFiles = torrent.files.filter((f: any) =>
+          SUB_EXTS.some(ext => f.name.toLowerCase().endsWith(ext))
+        );
+
+        if (subFiles.length > 0) {
+          setStatus(`Encontradas ${subFiles.length} legenda(s)! Carregando...`);
+          const hasPt = subFiles.some((f: any) => /\bpt\b|\bpor\b|portugu|brasil/.test(f.name.toLowerCase()));
+
+          subFiles.forEach((subFile: any) => {
+            subFile.getBuffer((err: any, buf: any) => {
+              if (err || !buf || !videoRef.current || cancelled) return;
+              try {
+                const text = new TextDecoder('utf-8').decode(buf instanceof Uint8Array ? buf : new Uint8Array(buf));
+                const isSrt = subFile.name.toLowerCase().endsWith('.srt');
+                const vttContent = isSrt ? srtToVtt(text) : text;
+                const blob = new Blob([vttContent], { type: 'text/vtt' });
+                const url = URL.createObjectURL(blob);
+                subUrlsRef.current.push(url);
+
+                const { srclang, label } = getLangFromName(subFile.name);
+                const track = document.createElement('track');
+                track.kind = 'subtitles';
+                track.label = label;
+                track.srclang = srclang;
+                track.src = url;
+                track.default = hasPt ? srclang === 'pt' : srclang === 'en';
+                videoRef.current.appendChild(track);
+              } catch {}
+            });
+          });
+        }
 
         torrent.on('download', () => {
           if (cancelled || !loadingVisible) return;
           const pct = Math.round(torrent.progress * 100);
-          if (pct > 0) setStatus(`Baixando... ${pct}%`);
+          const peers = torrent.numPeers;
+          if (pct > 0) setStatus(`${pct}% — ${peers} peers`);
         });
       });
     };
@@ -348,6 +403,9 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
 
     return () => {
       cancelled = true;
+      // Revoke subtitle blob URLs
+      subUrlsRef.current.forEach(u => URL.revokeObjectURL(u));
+      subUrlsRef.current = [];
       if (clientRef.current) {
         try { clientRef.current.destroy(); } catch {}
         clientRef.current = null;
@@ -355,7 +413,7 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
     };
   }, [magnet]);
 
-  // Animated dots for loading text
+  // Animated dots
   useEffect(() => {
     if (!loadingVisible) return;
     const t = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 500);
@@ -373,15 +431,12 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
       </div>
 
       <div className="flex-1 w-full relative" style={{ minHeight: 0 }}>
-        {/* Actual movie video — always in DOM so WebTorrent can attach */}
         <video
           ref={videoRef}
           controls
           autoPlay
           className="absolute inset-0 w-full h-full bg-black"
         />
-
-        {/* Mario overlay — covers video until canplay fires */}
         {loadingVisible && (
           <MarioOverlay title={title} dots={dots} fading={loadingFading} />
         )}
@@ -576,7 +631,7 @@ function Watch() {
   return (
     <div className="min-h-screen bg-[#0d0d0d] text-white overflow-x-hidden">
       {streamMagnet && (
-        <StreamModalWebtor
+        <StreamModalWT
           magnet={streamMagnet}
           title={displayTitle}
           poster={title?.poster}
