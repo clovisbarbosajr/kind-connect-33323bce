@@ -299,16 +299,20 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
   const [dots, setDots] = useState('');
   const [status, setStatus] = useState('Conectando aos peers...');
 
-  // Register canplay listener immediately on mount
+  // Register canplay listener + 25s hard timeout to reveal player
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    const onCanPlay = () => {
+    const fade = () => {
       setLoadingFading(true);
       setTimeout(() => setLoadingVisible(false), 600);
     };
-    video.addEventListener('canplay', onCanPlay, { once: true });
-    return () => video.removeEventListener('canplay', onCanPlay);
+    video.addEventListener('canplay', fade, { once: true });
+    const timeout = setTimeout(fade, 25000); // reveal player after 25s even without canplay
+    return () => {
+      video.removeEventListener('canplay', fade);
+      clearTimeout(timeout);
+    };
   }, []);
 
   // Load WebTorrent, stream video, and load subtitles from torrent
@@ -438,7 +442,13 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
           className="absolute inset-0 w-full h-full bg-black"
         />
         {loadingVisible && (
-          <MarioOverlay title={title} dots={dots} fading={loadingFading} />
+          <div className="absolute inset-0 bg-black flex flex-col items-center justify-center gap-4 z-10"
+            style={{ transition: 'opacity 0.6s', opacity: loadingFading ? 0 : 1, pointerEvents: loadingFading ? 'none' : 'auto' }}>
+            <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            <p className="text-white text-sm font-bold text-center px-6">{title}</p>
+            <p className="text-zinc-400 text-xs text-center px-6">{status}{dots}</p>
+            <p className="text-zinc-600 text-[10px] text-center px-6">WebTorrent • sem anúncios</p>
+          </div>
         )}
       </div>
     </div>
