@@ -10,13 +10,16 @@ export function NavBar() {
     <header className="fixed top-0 left-0 right-0 z-[500000] bg-[#0c0c0c]/98 shadow-lg">
       <div className="max-w-7xl mx-auto px-4 lg:px-8">
         <nav className="flex items-center gap-6 h-[60px] w-full text-white">
-          <Link to="/" search={{ filter: undefined }} className="flex items-center">
+          <Link to="/" search={{ filter: undefined }} className="flex items-center flex-shrink-0">
             <InwiseLogo size="sm" />
           </Link>
-          <Link to="/" search={{ filter: undefined }} className={navInactive}>Início</Link>
-          <Link to="/" search={{ filter: 'movie' }} className={navInactive}>Filmes</Link>
-          <Link to="/" search={{ filter: 'series' }} className={navInactive}>Séries</Link>
-          <Link to="/" search={{ filter: 'top' }} className={navInactive}>Top IMDb</Link>
+          {/* Nav links — hidden on mobile to prevent overflow onto page content */}
+          <div className="hidden sm:flex items-center gap-6">
+            <Link to="/" search={{ filter: undefined }} className={navInactive}>Início</Link>
+            <Link to="/" search={{ filter: 'movie' }} className={navInactive}>Filmes</Link>
+            <Link to="/" search={{ filter: 'series' }} className={navInactive}>Séries</Link>
+            <Link to="/" search={{ filter: 'top' }} className={navInactive}>Top IMDb</Link>
+          </div>
         </nav>
       </div>
     </header>
