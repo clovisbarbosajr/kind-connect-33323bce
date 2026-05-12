@@ -395,13 +395,13 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
 // Events fired: "torrent fetched" → "play_clicked" → "current time" (each second of playback)
 function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string; title: string; poster?: string; onClose: () => void }) {
   const containerId = useRef('wtor' + Date.now().toString(36)).current;
-  const [loadingVisible, setLoadingVisible] = useState(true);
+  const [loadingVisible, setLoadingVisible] = useState(false); // DEBUG: overlay off
   const [loadingFading, setLoadingFading] = useState(false);
   const [showTapHint, setShowTapHint] = useState(false);
   const [tapped, setTapped]           = useState(false);
   const [dots, setDots]               = useState('');
   const playerRef  = useRef<any>(null);   // webtor Player object — exposes .play()
-  const fadedRef   = useRef(false);
+  const fadedRef   = useRef(true); // DEBUG: already faded
 
   // User taps the 👆 overlay → show ✅ briefly then reveal webtor player
   // We do NOT call player.play() via postMessage — Brave/Chrome blocks autoplay
