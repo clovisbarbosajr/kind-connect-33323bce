@@ -471,9 +471,7 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
 
     // Fresh SDK init: remove old script so it re-executes from cache
     document.querySelectorAll(`script[src="${WEBTOR_SDK}"]`).forEach(s => s.remove());
-    (window as any).webtor = [{ id: cid, magnet, lang: 'pt', userLang: 'pt', width: '100%', height: '100%', autoplay: true,
-      on: (e: any) => { console.log('[WEBTOR EVENT]', JSON.stringify(e)); }
-    }];
+    (window as any).webtor = [{ id: cid, magnet, lang: 'pt', userLang: 'pt', width: '100%', height: '100%', autoplay: true }];
     const script = document.createElement('script');
     script.src = WEBTOR_SDK;
     document.head.appendChild(script);
@@ -641,7 +639,7 @@ function Watch() {
   return (
     <div className="min-h-screen bg-[#0d0d0d] text-white overflow-x-hidden">
       {streamMagnet && (
-        <StreamModalWT
+        <StreamModalWebtor
           magnet={streamMagnet}
           title={displayTitle}
           poster={title?.poster}
