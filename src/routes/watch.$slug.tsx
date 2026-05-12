@@ -86,7 +86,7 @@ const OVERLAY_CSS = `
   }
 `;
 
-function MarioOverlay({ title, dots, fading, showTapHint, tapped }: { title: string; dots: string; fading: boolean; showTapHint?: boolean; tapped?: boolean; statusText?: string }) {
+function MarioOverlay({ title, dots, fading, showTapHint, tapped, onTap }: { title: string; dots: string; fading: boolean; showTapHint?: boolean; tapped?: boolean; onTap?: () => void }) {
   return (
     <div className="absolute inset-0 z-10 overflow-hidden"
       style={{ transition: 'opacity 0.6s', opacity: fading ? 0 : 1, pointerEvents: 'none' }}>
@@ -149,10 +149,14 @@ function MarioOverlay({ title, dots, fading, showTapHint, tapped }: { title: str
         </div>
       ))}
 
-      {/* ── Centro: 👆 quando pronto / ✅ após toque confirmado ── */}
+      {/* ── Centro: 👆 clicável quando pronto / ✅ após toque confirmado ── */}
       {(showTapHint || tapped) && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ zIndex: 5, pointerEvents: 'none' }}>
-          {(showTapHint && !tapped) ? (
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center"
+          style={{ zIndex: 5, pointerEvents: showTapHint ? 'auto' : 'none', cursor: showTapHint ? 'pointer' : 'default' }}
+          onClick={showTapHint ? onTap : undefined}
+        >
+          {showTapHint ? (
             <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
               <div style={{
                 position: 'absolute', top: '50%', left: '50%',
@@ -385,125 +389,94 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
   );
 }
 
-// ── Webtor.io player — Mario overlay stays until player.js ready event ──
+// ── Webtor.io player — uses webtor's own {id,name,data} event protocol ──
+// SDK flow: push config → SDK creates iframe → iframe sends "init" → SDK sends back magnet
+// Events fired: "torrent fetched" → "play_clicked" → "current time" (each second of playback)
 function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string; title: string; poster?: string; onClose: () => void }) {
   const containerId = useRef('wtor' + Date.now().toString(36)).current;
   const [loadingVisible, setLoadingVisible] = useState(true);
   const [loadingFading, setLoadingFading] = useState(false);
-  const [showTapHint, setShowTapHint] = useState(false);   // 👆 shown when webtor play btn ready
-  const [tapped, setTapped]             = useState(false);  // user tapped → show "carregando"
-  const [dots, setDots] = useState('');
-  const fadeRef = useRef<(() => void) | null>(null);
+  const [showTapHint, setShowTapHint] = useState(false);
+  const [tapped, setTapped]           = useState(false);
+  const [dots, setDots]               = useState('');
+  const playerRef  = useRef<any>(null);   // webtor Player object — exposes .play()
+  const fadedRef   = useRef(false);
+
+  // User taps the 👆 overlay → programmatically trigger play + show ✅
+  const handleTap = () => {
+    if (tapped) return;
+    setShowTapHint(false);
+    setTapped(true);
+    try { playerRef.current?.play(); } catch {}
+  };
 
   useEffect(() => {
     const id = containerId;
+    fadedRef.current = false;
 
-    const initPlayer = () => {
-      (window as any).webtor = (window as any).webtor || [];
-      (window as any).webtor.push({
-        id,
-        magnet,
-        lang: 'pt',
-        width: '100%',
-        height: '100%',
-        autoplay: true,
-      });
-    };
-
-    if (document.querySelector(`script[src="${WEBTOR_SDK}"]`)) {
-      initPlayer();
-    } else {
-      const s = document.createElement('script');
-      s.src = WEBTOR_SDK;
-      s.charset = 'utf-8';
-      s.onload = initPlayer;
-      document.head.appendChild(s);
-    }
-
-    let faded = false;
     const fade = () => {
-      if (faded) return;
-      faded = true;
+      if (fadedRef.current) return;
+      fadedRef.current = true;
       setLoadingFading(true);
       setTimeout(() => setLoadingVisible(false), 600);
     };
-    fadeRef.current = fade;
 
-    // Send play command to the webtor iframe via player.js protocol
-    const tryPlay = () => {
-      const container = document.getElementById(id);
-      const iframe = container?.querySelector('iframe') as HTMLIFrameElement | null;
-      if (!iframe?.contentWindow) return;
-      try {
-        iframe.contentWindow.postMessage(JSON.stringify({
-          context: 'player.js', version: '0.0.11', method: 'play', value: null,
-        }), '*');
-      } catch {}
-    };
+    // Show 👆 hint after 15s if "torrent fetched" event hasn't fired yet
+    const hintTimer = setTimeout(() => setShowTapHint(true), 15000);
 
-    // player.js events:
-    // ready      → video player initialized (play btn visible) → show 👆
-    // play       → user clicked play → confirm tapped, hide 👆
-    // timeupdate → frames moving = movie really started → fade overlay
-    const onMessage = (e: MessageEvent) => {
-      try {
-        const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        if (!d || d.context !== 'player.js') return;
-        if (d.event === 'ready')      {
+    // Hard fallback — 120s maximum so overlay never gets stuck forever
+    const hardFallback = setTimeout(fade, 120000);
+
+    // Push config to webtor SDK — the `on` callback receives ALL events
+    // The SDK will create the iframe itself via its own init handshake
+    (window as any).webtor = (window as any).webtor || [];
+    (window as any).webtor.push({
+      id,
+      magnet,
+      lang: 'pt',
+      width: '100%',
+      height: '100%',
+      autoplay: true,
+      on: (event: any) => {
+        // Capture the Player object so we can call .play() programmatically
+        if (event.player && !playerRef.current) playerRef.current = event.player;
+
+        const name: string = event.name || '';
+
+        // Torrent metadata received → play button is about to appear
+        if (name === 'torrent fetched' || name === 'inited') {
+          clearTimeout(hintTimer);
           setShowTapHint(true);
-          tryPlay();
-          // After 5s showing 👆, auto-switch to "AGUARDANDO" (user likely tapped)
-          setTimeout(() => { setShowTapHint(false); setTapped(true); }, 5000);
         }
-        if (d.event === 'play')       { setShowTapHint(false); setTapped(true); } // player.js play confirmed
-        if (d.event === 'timeupdate') { fade(); }                                  // frames moving = film started
-      } catch {}
-    };
-    window.addEventListener('message', onMessage);
 
+        // Play button was clicked (by user OR our .play() call)
+        if (name === 'play_clicked') {
+          setShowTapHint(false);
+          setTapped(true);
+        }
 
-    // MutationObserver: intercept SDK iframe, recreate with allow="autoplay"
-    // Fallback hint: show 👆 after 30s if player.js ready never fires
-    // (webtor terminal phase typically takes 20-30s)
-    let iframeDetected = false;
-    let playRetry: ReturnType<typeof setInterval> | null = null;
-    let hintTimer: ReturnType<typeof setTimeout> | null = null;
-    const container = document.getElementById(id);
-    const observer = container
-      ? new MutationObserver(() => {
-          const sdkIframe = container.querySelector('iframe:not([data-managed])') as HTMLIFrameElement | null;
-          if (!iframeDetected && sdkIframe) {
-            iframeDetected = true;
-            const src = sdkIframe.src;
-            if (!src) return;
-            sdkIframe.remove();
-            const iframe = document.createElement('iframe');
-            iframe.src = src.includes('autoplay') ? src : src + (src.includes('?') ? '&' : '#') + 'autoplay=1';
-            iframe.allow = 'autoplay; fullscreen; picture-in-picture';
-            iframe.style.cssText = 'width:100%;height:100%;border:0;position:absolute;inset:0;';
-            iframe.dataset.managed = 'true';
-            container.appendChild(iframe);
-            // Fallback: if player.js ready never fires, show hint after 30s
-            hintTimer = setTimeout(() => {
-              setShowTapHint(true);
-              // After 5s showing the 👆, auto-switch to "AGUARDANDO" so user knows it registered
-              setTimeout(() => { setShowTapHint(false); setTapped(true); }, 5000);
-            }, 30000);
-            playRetry = setInterval(tryPlay, 2000);
-          }
-        })
-      : null;
-    if (observer && container) observer.observe(container, { childList: true, subtree: true });
+        // Video is actually playing — fade the overlay
+        if (name === 'current time' && typeof event.data === 'number' && event.data > 0) {
+          setTimeout(fade, 300);
+        }
+        if (name === 'player status' && event.data?.status === 'playing') {
+          setTimeout(fade, 300);
+        }
+      },
+    });
 
-    // Hard fallback — 90s maximum
-    const fallback = setTimeout(fade, 90000);
+    // Load SDK if not yet present; if already loaded window.webtor is the
+    // generator so our push above already called WebtorGenerator.push()
+    if (!document.querySelector(`script[src="${WEBTOR_SDK}"]`)) {
+      const s = document.createElement('script');
+      s.src = WEBTOR_SDK;
+      s.charset = 'utf-8';
+      document.head.appendChild(s);
+    }
 
     return () => {
-      clearTimeout(fallback);
-      if (hintTimer) clearTimeout(hintTimer);
-      if (playRetry) clearInterval(playRetry);
-      observer?.disconnect();
-      window.removeEventListener('message', onMessage);
+      clearTimeout(hintTimer);
+      clearTimeout(hardFallback);
       const el = document.getElementById(id);
       if (el) el.innerHTML = '';
     };
@@ -526,12 +499,19 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
         </button>
       </div>
 
-      <style>{`#${containerId} iframe { width:100%!important; height:100%!important; border:0; }`}</style>
+      <style>{`#${containerId} { position:relative; } #${containerId} iframe { position:absolute!important; inset:0!important; width:100%!important; height:100%!important; border:0!important; }`}</style>
 
       <div className="flex-1 w-full relative" style={{ minHeight: 0 }}>
         <div id={containerId} className="absolute inset-0" />
         {loadingVisible && (
-          <MarioOverlay title={title} dots={dots} fading={loadingFading} showTapHint={showTapHint} tapped={tapped} />
+          <MarioOverlay
+            title={title}
+            dots={dots}
+            fading={loadingFading}
+            showTapHint={showTapHint && !tapped}
+            tapped={tapped}
+            onTap={handleTap}
+          />
         )}
       </div>
     </div>
