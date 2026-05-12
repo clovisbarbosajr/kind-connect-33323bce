@@ -455,33 +455,45 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
   );
 }
 
-// ── Webtor.io player — uses webtor's own {id,name,data} event protocol ──
-// SDK flow: push config → SDK creates iframe → iframe sends "init" → SDK sends back magnet
-// Optimisations vs previous version:
-//   • No lang/userLang → skips the slow OpenSubtitles search step (subtitles still accessible via player menu)
-//   • `path` extracted from magnet dn → webtor finds the video file without scanning the whole torrent
-//   • `poster` shown while buffering
-//   • Pre-warm divs cleaned up on mount (see Watch component pre-warm logic)
+// ── Webtor.io embed player ──
+// Optimisations:
+//   • No lang/userLang → skips slow OpenSubtitles search at startup; subtitles available via player CC menu
+//   • `path` from magnet dn → webtor finds the video file without scanning the whole torrent
+//   • `subtitles` built from known YTS torrent structure (Subs/CC.eng.srt etc.)
+//     The iframe is same-origin with webtor.io, so it can fetch these with the session cookie
+//   • `poster` shown while the torrent client warms up
 function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string; title: string; poster?: string; onClose: () => void }) {
-  // Stable unique id for this modal instance
   const cid = useRef('wt' + Math.random().toString(36).slice(2, 8)).current;
 
   useEffect(() => {
-    // Remove any pre-warm instances so their orphaned SDK doesn't interfere
-    document.querySelectorAll('[id^="wt_warm_"]').forEach(el => el.remove());
+    // Extract infoHash and display-name from magnet
+    const hashMatch = magnet.match(/urn:btih:([a-fA-F0-9]{40}|[a-zA-Z2-7]{32})/i);
+    const infoHash  = hashMatch ? hashMatch[1].toLowerCase() : '';
+    const dnMatch   = magnet.match(/[?&]dn=([^&]+)/i);
+    const dn        = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : '';
 
-    // Extract YTS file path from magnet dn — format: "{dn}/{dn}.mp4"
-    const dnMatch = magnet.match(/[?&]dn=([^&]+)/i);
-    const dn = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : '';
+    // YTS video file path: "{dn}/{dn}.mp4"
     const path = dn ? `${dn}/${dn}.mp4` : undefined;
 
-    // Inject iframe fill-style once into <head>
+    // YTS subtitle files live at: "{dn}/Subs/{filename}"
+    // The webtor iframe is same-origin with webtor.io → can fetch these URLs with the session cookie.
+    // If a file doesn't exist in the torrent webtor silently ignores it.
+    const subUrl = (filename: string) =>
+      `https://webtor.io/${infoHash}/${encodeURIComponent(dn + '/Subs/' + filename)}`;
+
+    const subtitles = (infoHash && dn) ? [
+      { src: subUrl('CC.eng.srt'),                 srclang: 'en', label: 'English'   },
+      { src: subUrl('Latin American.spa.srt'),      srclang: 'es', label: 'Español'   },
+      { src: subUrl('Canadian.fre.srt'),            srclang: 'fr', label: 'Français'  },
+    ] : undefined;
+
+    // Inject iframe fill-style
     const styleEl = document.createElement('style');
     styleEl.id = cid + '_s';
     styleEl.textContent = `#${cid}{position:relative}#${cid} iframe{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;border:0!important}`;
     document.head.appendChild(styleEl);
 
-    // Fresh SDK init: remove old script so it re-executes from cache
+    // Fresh SDK init (remove old script so it re-executes from cache)
     document.querySelectorAll(`script[src="${WEBTOR_SDK}"]`).forEach(s => s.remove());
 
     const cfg: Record<string, any> = {
@@ -490,11 +502,10 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
       width: '100%',
       height: '100%',
       autoplay: true,
-      // lang/userLang intentionally omitted → skips slow OpenSubtitles lookup on startup.
-      // User can still enable subtitles via the player's built-in CC/subtitles menu.
     };
-    if (poster) cfg.poster = poster;
-    if (path)   cfg.path   = path;   // direct file path → faster start
+    if (poster)    cfg.poster    = poster;
+    if (path)      cfg.path      = path;
+    if (subtitles) cfg.subtitles = subtitles;
 
     (window as any).webtor = [cfg];
     const script = document.createElement('script');
@@ -502,7 +513,6 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
     document.head.appendChild(script);
 
     return () => {
-      // Clean up on unmount
       document.getElementById(cid + '_s')?.remove();
       const el = document.getElementById(cid);
       if (el) el.innerHTML = '';
@@ -559,36 +569,6 @@ function Watch() {
   const [error, setError]             = useState<any>(null);
   const [openSeasons, setOpenSeasons] = useState<Set<number>>(new Set([1]));
   const [streamMagnet, setStreamMagnet] = useState<string | null>(null);
-  const prewarmDoneRef = useRef(false);
-
-  // ── Pre-warm: start webtor's server-side torrent client as soon as the page loads,
-  //    BEFORE the user clicks "Assistir".  When they do click, webtor's server has
-  //    already connected to peers / downloaded initial pieces → much faster start.
-  useEffect(() => {
-    if (!title || prewarmDoneRef.current) return;
-    const magnet = title.torrent_options?.[0]?.magnet_url;
-    if (!magnet) return;
-    prewarmDoneRef.current = true;
-
-    const warmId = 'wt_warm_' + (title.id as string).replace(/-/g, '').slice(0, 10);
-    const warmDiv = document.createElement('div');
-    warmDiv.id = warmId;
-    // Off-screen but non-zero size so the SDK actually boots the iframe
-    warmDiv.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:320px;height:180px;pointer-events:none;opacity:0;';
-    document.body.appendChild(warmDiv);
-
-    document.querySelectorAll(`script[src="${WEBTOR_SDK}"]`).forEach(s => s.remove());
-    (window as any).webtor = [{ id: warmId, magnet, width: '320px', height: '180px', autoplay: false }];
-    const s = document.createElement('script');
-    s.src = WEBTOR_SDK;
-    document.head.appendChild(s);
-
-    return () => {
-      document.getElementById(warmId)?.remove();
-      document.querySelectorAll(`script[src="${WEBTOR_SDK}"]`).forEach(s => s.remove());
-    };
-  }, [title]);
-
   useEffect(() => {
     async function load() {
       try {
