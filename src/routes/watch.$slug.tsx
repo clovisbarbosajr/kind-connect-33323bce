@@ -462,10 +462,41 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
 //   • `subtitles` built from known YTS torrent structure (Subs/CC.eng.srt etc.)
 //     The iframe is same-origin with webtor.io, so it can fetch these with the session cookie
 //   • `poster` shown while the torrent client warms up
+//   • Extra trackers injected into magnet → webtor's server finds peers faster
+
+// Popular UDP+HTTP trackers — webtor's backend uses these directly
+const EXTRA_TRACKERS = [
+  'udp://tracker.opentrackr.org:1337/announce',
+  'udp://open.tracker.cl:1337/announce',
+  'udp://tracker.openbittorrent.com:6969/announce',
+  'udp://opentracker.i2p.rocks:6969/announce',
+  'udp://tracker.torrent.eu.org:451/announce',
+  'udp://tracker.dler.org:6969/announce',
+  'udp://open.stealth.si:80/announce',
+  'udp://tracker.internetwarriors.net:1337/announce',
+  'udp://exodus.desync.com:6969/announce',
+  'udp://9.rarbg.to:2920/announce',
+  'https://tracker.gbitt.info/announce',
+  'https://tracker2.ctix.cn/announce',
+];
+
+/** Append any EXTRA_TRACKERS not already present in the magnet link. */
+function injectTrackers(magnet: string): string {
+  const existing = new Set(
+    [...magnet.matchAll(/[?&]tr=([^&]+)/g)].map(m => decodeURIComponent(m[1]))
+  );
+  const toAdd = EXTRA_TRACKERS.filter(t => !existing.has(t));
+  if (toAdd.length === 0) return magnet;
+  return magnet + toAdd.map(t => '&tr=' + encodeURIComponent(t)).join('');
+}
+
 function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string; title: string; poster?: string; onClose: () => void }) {
   const cid = useRef('wt' + Math.random().toString(36).slice(2, 8)).current;
 
   useEffect(() => {
+    // Inject extra trackers so webtor's server finds peers faster
+    const enrichedMagnet = injectTrackers(magnet);
+
     // Extract infoHash and display-name from magnet
     const hashMatch = magnet.match(/urn:btih:([a-fA-F0-9]{40}|[a-zA-Z2-7]{32})/i);
     const infoHash  = hashMatch ? hashMatch[1].toLowerCase() : '';
@@ -498,7 +529,7 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
 
     const cfg: Record<string, any> = {
       id: cid,
-      magnet,
+      magnet: enrichedMagnet,
       width: '100%',
       height: '100%',
       autoplay: true,
