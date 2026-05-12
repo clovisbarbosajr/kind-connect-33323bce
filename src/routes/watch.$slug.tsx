@@ -395,13 +395,13 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
 // Events fired: "torrent fetched" → "play_clicked" → "current time" (each second of playback)
 function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string; title: string; poster?: string; onClose: () => void }) {
   const containerId = useRef('wtor' + Date.now().toString(36)).current;
-  const [loadingVisible, setLoadingVisible] = useState(false); // DEBUG: overlay off
+  const [loadingVisible, setLoadingVisible] = useState(true);
   const [loadingFading, setLoadingFading] = useState(false);
   const [showTapHint, setShowTapHint] = useState(false);
   const [tapped, setTapped]           = useState(false);
   const [dots, setDots]               = useState('');
-  const playerRef  = useRef<any>(null);   // webtor Player object — exposes .play()
-  const fadedRef   = useRef(true); // DEBUG: already faded
+  const playerRef  = useRef<any>(null);
+  const fadedRef   = useRef(false);
 
   // User taps the 👆 overlay → show ✅ briefly then reveal webtor player
   // We do NOT call player.play() via postMessage — Brave/Chrome blocks autoplay
@@ -431,11 +431,11 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
       setTimeout(() => setLoadingVisible(false), 600);
     };
 
-    // Show 👆 hint after 15s if "torrent fetched" hasn't fired yet
-    const hintTimer = setTimeout(() => setShowTapHint(true), 15000);
+    // Show 👆 hint after 8s — overlay fades automatically after 10s
+    const hintTimer = setTimeout(() => setShowTapHint(true), 8000);
 
-    // Hard fallback — 120s maximum so overlay never gets stuck forever
-    const hardFallback = setTimeout(fade, 120000);
+    // Auto-fade: 10s after open the overlay disappears and webtor player shows
+    const hardFallback = setTimeout(fade, 10000);
 
     // ── Force a FRESH SDK init every time ────────────────────────────────
     // Problem: the SDK script stays in <head> across SPA navigations, so
