@@ -546,11 +546,7 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#18181b', borderBottom: '1px solid #27272a', flexShrink: 0 }}>
         <span style={{ color: '#fff', fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 12 }}>{title}</span>
-        <button 
-          onClick={onClose} 
-          style={{ background: '#3f3f46', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
-          title="Remover marca d'água (Gemini)"
-        >
+        <button onClick={onClose} style={{ background: '#3f3f46', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
           ✕ Fechar
         </button>
       </div>
