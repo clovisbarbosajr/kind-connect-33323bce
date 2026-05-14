@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NavBar } from "@/components/NavBar";
 import { InwiseLogo } from "@/components/InwiseLogo";
-import { rdStart, rdStatus } from "@/lib/rd.server";
+// rdStart / rdStatus replaced by direct fetch to /api/rd (no CSRF)
 
 // Webtor SDK — server-side BitTorrent streaming (works with regular TCP/UDP seeds)
 // Uses webtor.io main domain via SDK, NOT the broken embed.webtor.io subdomain
@@ -489,11 +489,12 @@ function StreamModalRD({ magnet, title, poster, onClose, onFallback }: {
       timerRef.current = setTimeout(async () => {
         if (cancelRef.current) return
         try {
-          const r = await rdStatus({ data: { id } })
+          const res = await fetch('/api/rd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'status', id }) })
+          const r = await res.json() as { status: string; url?: string; message?: string; progress?: number; seeders?: number }
           if (cancelRef.current) return
-          if (r.status === 'ready')  { setPhase({ kind: 'ready', url: r.url }); return }
-          if (r.status === 'error')  { setPhase({ kind: 'error', msg: r.message }); return }
-          setPhase({ kind: 'loading', msg: `${STATUS_MSG[r.status] ?? '⚡ Aguardando...'} ${r.progress > 0 ? r.progress + '%' : ''}`.trim(), progress: r.progress })
+          if (r.status === 'ready')  { setPhase({ kind: 'ready', url: r.url! }); return }
+          if (r.status === 'error')  { setPhase({ kind: 'error', msg: r.message ?? 'Erro RD' }); return }
+          setPhase({ kind: 'loading', msg: `${STATUS_MSG[r.status] ?? '⚡ Aguardando...'} ${(r.progress ?? 0) > 0 ? r.progress + '%' : ''}`.trim(), progress: r.progress })
           poll(id)
         } catch (e: any) {
           if (!cancelRef.current) setPhase({ kind: 'error', msg: e?.message ?? 'Erro no polling' })
@@ -527,15 +528,16 @@ function StreamModalRD({ magnet, title, poster, onClose, onFallback }: {
       setPhase({ kind: 'loading', msg: '⚡ Conectando ao Real-Debrid...' })
       try {
         const enriched = magnet.startsWith('magnet:') ? injectTrackers(magnet) : magnet
-        const r = await rdStart({ data: { magnet: enriched } })
+        const res = await fetch('/api/rd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'start', magnet: enriched }) })
+        const r = await res.json() as { status: string; url?: string; id?: string; message?: string; progress?: number; seeders?: number }
         if (cancelRef.current) return
-        if (r.status === 'ready')  { setPhase({ kind: 'ready', url: r.url }); return }
+        if (r.status === 'ready')  { setPhase({ kind: 'ready', url: r.url! }); return }
         if (r.status === 'error') {
-          if (isRdUnavailable(r.message)) { await fallback(); return }
-          setPhase({ kind: 'error', msg: r.message }); return
+          if (isRdUnavailable(r.message ?? '')) { await fallback(); return }
+          setPhase({ kind: 'error', msg: r.message ?? 'Erro RD' }); return
         }
-        setPhase({ kind: 'loading', msg: `${STATUS_MSG[r.status] ?? '⚡ Aguardando...'} ${r.progress > 0 ? r.progress + '%' : ''}`.trim(), progress: r.progress })
-        poll(r.id)
+        setPhase({ kind: 'loading', msg: `${STATUS_MSG[r.status] ?? '⚡ Aguardando...'} ${(r.progress ?? 0) > 0 ? r.progress + '%' : ''}`.trim(), progress: r.progress })
+        poll(r.id!)
       } catch (e: any) {
         // Network / server-fn error → fall back to webtor
         await fallback()
