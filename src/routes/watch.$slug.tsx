@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NavBar } from "@/components/NavBar";
 import { InwiseLogo } from "@/components/InwiseLogo";
+import { rdStart, rdStatus } from "@/lib/rd.server";
 
 // Webtor SDK — server-side BitTorrent streaming (works with regular TCP/UDP seeds)
 // Uses webtor.io main domain via SDK, NOT the broken embed.webtor.io subdomain
@@ -455,12 +456,140 @@ function StreamModalWT({ magnet, title, onClose }: { magnet: string; title: stri
   );
 }
 
-// ── Webtor.io embed player ──
+// ── Real-Debrid player ──────────────────────────────────────────────────────
+// Calls rdStart / rdStatus (TanStack Start server functions that run in the
+// Cloudflare Worker — no CORS issues, API key never reaches the browser).
+// For cached YTS titles the video URL is ready in ~2-3 seconds.
+
+type RDPhase =
+  | { kind: 'loading'; msg: string; progress?: number }
+  | { kind: 'ready';   url: string }
+  | { kind: 'error';   msg: string }
+
+function StreamModalRD({ magnet, title, poster, onClose, onFallback }: {
+  magnet: string; title: string; poster?: string
+  onClose: () => void; onFallback: () => void
+}) {
+  const [phase, setPhase] = useState<RDPhase>({ kind: 'loading', msg: '⚡ Conectando ao Real-Debrid...' })
+  const cancelRef  = useRef(false)
+  const timerRef   = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    cancelRef.current = false
+
+    const STATUS_MSG: Record<string, string> = {
+      downloading: '⚡ A baixar no Real-Debrid...',
+      queued:      '⚡ Na fila do Real-Debrid...',
+      waiting:     '⚡ Preparando ficheiros...',
+      other:       '⚡ Aguardando...',
+    }
+
+    const poll = async (id: string) => {
+      if (cancelRef.current) return
+      timerRef.current = setTimeout(async () => {
+        if (cancelRef.current) return
+        try {
+          const r = await rdStatus({ data: { id } })
+          if (cancelRef.current) return
+          if (r.status === 'ready')  { setPhase({ kind: 'ready', url: r.url }); return }
+          if (r.status === 'error')  { setPhase({ kind: 'error', msg: r.message }); return }
+          setPhase({ kind: 'loading', msg: `${STATUS_MSG[r.status] ?? '⚡ Aguardando...'} ${r.progress > 0 ? r.progress + '%' : ''}`.trim(), progress: r.progress })
+          poll(id)
+        } catch (e: any) {
+          if (!cancelRef.current) setPhase({ kind: 'error', msg: e?.message ?? 'Erro no polling' })
+        }
+      }, 3000)
+    }
+
+    const start = async () => {
+      setPhase({ kind: 'loading', msg: '⚡ Conectando ao Real-Debrid...' })
+      try {
+        const enriched = injectTrackers(magnet)
+        const r = await rdStart({ data: { magnet: enriched } })
+        if (cancelRef.current) return
+        if (r.status === 'ready')  { setPhase({ kind: 'ready', url: r.url }); return }
+        if (r.status === 'error')  { setPhase({ kind: 'error', msg: r.message }); return }
+        setPhase({ kind: 'loading', msg: `${STATUS_MSG[r.status] ?? '⚡ Aguardando...'} ${r.progress > 0 ? r.progress + '%' : ''}`.trim(), progress: r.progress })
+        poll(r.id)
+      } catch (e: any) {
+        if (!cancelRef.current) setPhase({ kind: 'error', msg: e?.message ?? 'Erro ao conectar' })
+      }
+    }
+
+    start()
+    return () => { cancelRef.current = true; if (timerRef.current) clearTimeout(timerRef.current) }
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 999999, display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#18181b', borderBottom: '1px solid #27272a', flexShrink: 0 }}>
+        <span style={{ color: '#fff', fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, marginRight: 12 }}>{title}</span>
+        <button onClick={onClose} style={{ color: '#fff', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+          <X size={20} />
+        </button>
+      </div>
+
+      {/* Body */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', background: '#000' }}>
+
+        {/* Loading */}
+        {phase.kind === 'loading' && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+            {poster && <img src={poster} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.12, filter: 'blur(12px)', pointerEvents: 'none' }} />}
+            <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: '0 32px', maxWidth: 320 }}>
+              <div style={{ fontSize: 44, marginBottom: 14, lineHeight: 1 }}>⚡</div>
+              <div style={{ color: '#fff', fontSize: 14, fontWeight: 600, marginBottom: 14 }}>{phase.msg}</div>
+              {(phase.progress ?? 0) > 0 && (
+                <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.15)', borderRadius: 2, overflow: 'hidden', marginBottom: 10 }}>
+                  <div style={{ width: `${phase.progress}%`, height: '100%', background: '#22c55e', borderRadius: 2, transition: 'width 1s ease' }} />
+                </div>
+              )}
+              <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, marginTop: 6 }}>Real-Debrid Premium</div>
+            </div>
+          </div>
+        )}
+
+        {/* Video */}
+        {phase.kind === 'ready' && (
+          <video
+            key={phase.url}
+            src={phase.url}
+            controls
+            autoPlay
+            playsInline
+            style={{ width: '100%', height: '100%', background: '#000' }}
+            poster={poster}
+          />
+        )}
+
+        {/* Error */}
+        {phase.kind === 'error' && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24 }}>
+            {poster && <img src={poster} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.08, filter: 'blur(12px)', pointerEvents: 'none' }} />}
+            <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', maxWidth: 300 }}>
+              <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>❌ {phase.msg}</div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button onClick={onFallback} style={{ padding: '8px 16px', background: '#3f3f46', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>
+                  Tentar com Webtor
+                </button>
+                <button onClick={onClose} style={{ padding: '8px 16px', background: '#27272a', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 12 }}>
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Webtor.io embed player (fallback) ───────────────────────────────────────
+//   Used as fallback if Real-Debrid fails (e.g. dead torrent, unsupported format).
 // Optimisations:
-//   • No lang/userLang → skips slow OpenSubtitles search at startup; subtitles available via player CC menu
-//   • `path` from magnet dn → webtor finds the video file without scanning the whole torrent
-//   • `subtitles` built from known YTS torrent structure (Subs/CC.eng.srt etc.)
-//     The iframe is same-origin with webtor.io, so it can fetch these with the session cookie
+//   • No lang/userLang → skips slow OpenSubtitles search at startup
+//   • `path` from magnet dn → webtor finds the video file without scanning the torrent
 //   • `poster` shown while the torrent client warms up
 //   • Extra trackers injected into magnet → webtor's server finds peers faster
 
@@ -590,7 +719,8 @@ function Watch() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<any>(null);
   const [openSeasons, setOpenSeasons] = useState<Set<number>>(new Set([1]));
-  const [streamMagnet, setStreamMagnet] = useState<string | null>(null);
+  const [streamMagnet, setStreamMagnet]   = useState<string | null>(null);
+  const [useWebtor, setUseWebtor]         = useState(false);
   useEffect(() => {
     async function load() {
       try {
@@ -627,7 +757,7 @@ function Watch() {
   const toggleSeason = (n: number) =>
     setOpenSeasons(prev => { const s = new Set(prev); s.has(n) ? s.delete(n) : s.add(n); return s; });
 
-  const openOnline = (magnet: string) => setStreamMagnet(magnet);
+  const openOnline = (magnet: string) => { setUseWebtor(false); setStreamMagnet(magnet); };
 
   const downloadTorrent = (magnet: string) => {
     if (magnet.startsWith('https://')) window.open(magnet, '_blank');
@@ -694,7 +824,16 @@ function Watch() {
 
   return (
     <div className="min-h-screen bg-[#0d0d0d] text-white overflow-x-hidden">
-      {streamMagnet && (
+      {streamMagnet && !useWebtor && (
+        <StreamModalRD
+          magnet={streamMagnet}
+          title={displayTitle}
+          poster={title?.poster}
+          onClose={() => setStreamMagnet(null)}
+          onFallback={() => setUseWebtor(true)}
+        />
+      )}
+      {streamMagnet && useWebtor && (
         <StreamModalWebtor
           magnet={streamMagnet}
           title={displayTitle}
