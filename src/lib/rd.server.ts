@@ -52,6 +52,19 @@ export const rdStart = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<RdStartResult> => {
     const { magnet } = data
     try {
+      // https:// links → try unrestrict/link directly (hosters like GDrive, etc.)
+      // If the hoster is unsupported, return a recognisable error so the client falls back.
+      if (magnet.startsWith('http')) {
+        const unres = await rdFetch('/unrestrict/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `link=${encodeURIComponent(magnet)}`,
+        })
+        if (unres.download) return { status: 'ready', url: unres.download as string, id: '' }
+        // hoster_unsupported (16), wrong_parameter (2), etc. → caller will fall back to webtor
+        return { status: 'error', message: 'unrestrict: ' + JSON.stringify(unres) }
+      }
+
       // 1 – add magnet
       const added = await rdFetch('/torrents/addMagnet', {
         method: 'POST',

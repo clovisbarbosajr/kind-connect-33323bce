@@ -501,33 +501,44 @@ function StreamModalRD({ magnet, title, poster, onClose, onFallback }: {
       }, 3000)
     }
 
-    // RD errors that mean "this torrent is blocked/unavailable on RD" →
-    // fall back to webtor silently instead of showing an error.
-    const isRdBlocked = (msg: string) =>
-      msg.includes('infringing_file') ||
-      msg.includes('error_code":35') ||
-      msg.includes('error_code":8') ||   // bad_token / permission
-      msg.includes('"magnet_error"') ||
-      msg.includes('"virus"') ||
+    // Any RD error that means "can't stream this" → fall back to webtor.
+    // Covers: DMCA (35), wrong magnet (2), unsupported hoster (16),
+    // dead torrent, virus, magnet_error, bad_token, wrong_parameter.
+    const isRdUnavailable = (msg: string) =>
+      msg.includes('infringing_file')    ||  // DMCA
+      msg.includes('hoster_unsupported') ||  // https:// link, hoster not in RD
+      msg.includes('wrong_parameter')    ||  // bad magnet / bad link
+      msg.includes('error_code":35')     ||
+      msg.includes('error_code":16')     ||
+      msg.includes('error_code":2')      ||
+      msg.includes('error_code":8')      ||  // bad_token
+      msg.includes('"magnet_error"')     ||
+      msg.includes('"virus"')            ||
       msg.includes('"dead"')
+
+    const fallback = async () => {
+      if (cancelRef.current) return
+      setPhase({ kind: 'loading', msg: '▶ Usando Webtor...' })
+      await new Promise(r => setTimeout(r, 600))
+      if (!cancelRef.current) onFallback()
+    }
 
     const start = async () => {
       setPhase({ kind: 'loading', msg: '⚡ Conectando ao Real-Debrid...' })
       try {
-        const enriched = injectTrackers(magnet)
+        const enriched = magnet.startsWith('magnet:') ? injectTrackers(magnet) : magnet
         const r = await rdStart({ data: { magnet: enriched } })
         if (cancelRef.current) return
         if (r.status === 'ready')  { setPhase({ kind: 'ready', url: r.url }); return }
         if (r.status === 'error') {
-          // DMCA-blocked or dead torrent → silently switch to webtor
-          if (isRdBlocked(r.message)) { onFallback(); return }
+          if (isRdUnavailable(r.message)) { await fallback(); return }
           setPhase({ kind: 'error', msg: r.message }); return
         }
         setPhase({ kind: 'loading', msg: `${STATUS_MSG[r.status] ?? '⚡ Aguardando...'} ${r.progress > 0 ? r.progress + '%' : ''}`.trim(), progress: r.progress })
         poll(r.id)
       } catch (e: any) {
-        // Network/server error → also fall back to webtor
-        if (!cancelRef.current) onFallback()
+        // Network / server-fn error → fall back to webtor
+        await fallback()
       }
     }
 
