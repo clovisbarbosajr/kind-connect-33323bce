@@ -501,6 +501,16 @@ function StreamModalRD({ magnet, title, poster, onClose, onFallback }: {
       }, 3000)
     }
 
+    // RD errors that mean "this torrent is blocked/unavailable on RD" →
+    // fall back to webtor silently instead of showing an error.
+    const isRdBlocked = (msg: string) =>
+      msg.includes('infringing_file') ||
+      msg.includes('error_code":35') ||
+      msg.includes('error_code":8') ||   // bad_token / permission
+      msg.includes('"magnet_error"') ||
+      msg.includes('"virus"') ||
+      msg.includes('"dead"')
+
     const start = async () => {
       setPhase({ kind: 'loading', msg: '⚡ Conectando ao Real-Debrid...' })
       try {
@@ -508,11 +518,16 @@ function StreamModalRD({ magnet, title, poster, onClose, onFallback }: {
         const r = await rdStart({ data: { magnet: enriched } })
         if (cancelRef.current) return
         if (r.status === 'ready')  { setPhase({ kind: 'ready', url: r.url }); return }
-        if (r.status === 'error')  { setPhase({ kind: 'error', msg: r.message }); return }
+        if (r.status === 'error') {
+          // DMCA-blocked or dead torrent → silently switch to webtor
+          if (isRdBlocked(r.message)) { onFallback(); return }
+          setPhase({ kind: 'error', msg: r.message }); return
+        }
         setPhase({ kind: 'loading', msg: `${STATUS_MSG[r.status] ?? '⚡ Aguardando...'} ${r.progress > 0 ? r.progress + '%' : ''}`.trim(), progress: r.progress })
         poll(r.id)
       } catch (e: any) {
-        if (!cancelRef.current) setPhase({ kind: 'error', msg: e?.message ?? 'Erro ao conectar' })
+        // Network/server error → also fall back to webtor
+        if (!cancelRef.current) onFallback()
       }
     }
 
