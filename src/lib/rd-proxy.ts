@@ -106,8 +106,14 @@ export async function handleRdProxy(request: Request): Promise<Response> {
     return new Response(null, { status: 204, headers: CORS })
 
   try {
-    const body = await request.json() as { action?: string; magnet?: string; id?: string }
-    const { action, magnet, id } = body
+    // Use text() + JSON.parse() instead of request.json() — more reliable in Cloudflare Workers
+    // for bodies containing specific byte patterns (e.g. magnet:?xt=urn:btih: hashes).
+    const rawText = await request.text()
+    const body = JSON.parse(rawText) as { action?: string; magnet?: string; id?: string }
+    const { action, id } = body
+    // Magnet is URL-encoded on the client side to prevent & from truncating the JSON body
+    // at the Cloudflare edge. Decode it here before passing to Real-Debrid.
+    const magnet = body.magnet ? decodeURIComponent(body.magnet) : undefined
 
     let result: Record<string, any>
     if (action === 'start' && magnet)       result = await handleStart(magnet)

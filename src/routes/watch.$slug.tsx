@@ -528,7 +528,7 @@ function StreamModalRD({ magnet, title, poster, onClose, onFallback }: {
       setPhase({ kind: 'loading', msg: '⚡ Conectando ao Real-Debrid...' })
       try {
         const enriched = magnet.startsWith('magnet:') ? injectTrackers(magnet) : magnet
-        const res = await fetch('/api/rd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'start', magnet: enriched }) })
+        const res = await fetch('/api/rd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'start', magnet: encodeURIComponent(enriched) }) })
         const r = await res.json() as { status: string; url?: string; id?: string; message?: string; progress?: number; seeders?: number }
         if (cancelRef.current) return
         if (r.status === 'ready')  { setPhase({ kind: 'ready', url: r.url! }); return }
