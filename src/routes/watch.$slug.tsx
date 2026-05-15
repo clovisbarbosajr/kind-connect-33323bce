@@ -15,6 +15,14 @@ import { InwiseLogo } from "@/components/InwiseLogo";
 // Uses webtor.io main domain via SDK, NOT the broken embed.webtor.io subdomain
 const WEBTOR_SDK = 'https://cdn.jsdelivr.net/npm/@webtor/embed-sdk-js/dist/index.min.js';
 
+// Self-hosted webtor instance URL — removes all ads.
+// Deploy for free on Railway.app:
+//   1. New project → Deploy Docker image → ghcr.io/webtor-io/self-hosted:latest
+//   2. Add env var: DOMAIN=https://<your-railway-url>
+//   3. Paste the Railway URL below (e.g. 'https://webtor-xxx.railway.app')
+// Leave empty ('') to use webtor.io (free, but has ads).
+const WEBTOR_BASE_URL = '';
+
 const POPCORN_COLORS = ['#f8d878','#f0b820','#fce8a0','#e8a800','#fff0b0','#f4c840','#ffe060','#f0c030'];
 const STAR_COLORS   = ['#ffd700','#ffe040','#ffb020','#ffc040','#ffe860','#ffda30'];
 
@@ -691,12 +699,10 @@ function StreamModalWebtor({ magnet, title, poster, imdbId, onClose }: { magnet:
       autoplay: true,
       userlang: 'pt',
     };
-    if (poster)  cfg.poster  = poster;
-    if (path)    cfg.path    = path;
-    if (imdbId) {
-      cfg.imdbId   = imdbId;
-      cfg.features = { opensubtitles: true };
-    }
+    if (poster)          cfg.poster  = poster;
+    if (path)            cfg.path    = path;
+    if (imdbId)        { cfg.imdbId  = imdbId; cfg.features = { opensubtitles: true }; }
+    if (WEBTOR_BASE_URL) cfg.baseUrl = WEBTOR_BASE_URL;
 
     (window as any).webtor = [cfg];
     const script = document.createElement('script');
