@@ -109,11 +109,11 @@ export async function handleRdProxy(request: Request): Promise<Response> {
     // Use text() + JSON.parse() instead of request.json() — more reliable in Cloudflare Workers
     // for bodies containing specific byte patterns (e.g. magnet:?xt=urn:btih: hashes).
     const rawText = await request.text()
-    const body = JSON.parse(rawText) as { action?: string; magnet?: string; id?: string }
+    const body = JSON.parse(rawText) as { action?: string; hash?: string; id?: string }
     const { action, id } = body
-    // Magnet is base64-encoded on the client side (btoa) to avoid Cloudflare WAF
-    // blocking specific byte patterns in JSON bodies. Decode it here.
-    const magnet = body.magnet ? decodeURIComponent(escape(atob(body.magnet))) : undefined
+    // Client sends only the infoHash (40 hex chars) to avoid Cloudflare WAF blocking
+    // magnet URI patterns in JSON bodies. Reconstruct the magnet here on the server.
+    const magnet = body.hash ? `magnet:?xt=urn:btih:${body.hash}` : undefined
 
     let result: Record<string, any>
     if (action === 'start' && magnet)       result = await handleStart(magnet)
