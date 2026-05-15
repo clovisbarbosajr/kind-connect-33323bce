@@ -113,7 +113,8 @@ export async function handleRdProxy(request: Request): Promise<Response> {
     const { action, id } = body
     // Client sends only the infoHash (40 hex chars) to avoid Cloudflare WAF blocking
     // magnet URI patterns in JSON bodies. Reconstruct the magnet here on the server.
-    const magnet = body.hash ? `magnet:?xt=urn:btih:${body.hash}` : undefined
+    // RD rejects bare magnets (hash-only) — append &dn= so it parses correctly.
+    const magnet = body.hash ? `magnet:?xt=urn:btih:${body.hash}&dn=${encodeURIComponent(body.dn ?? 'film')}` : undefined
 
     let result: Record<string, any>
     if (action === 'start' && magnet)       result = await handleStart(magnet)
