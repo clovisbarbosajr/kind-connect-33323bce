@@ -663,8 +663,10 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
     const dnMatch   = magnet.match(/[?&]dn=([^&]+)/i);
     const dn        = dnMatch ? decodeURIComponent(dnMatch[1].replace(/\+/g, ' ')) : '';
 
-    // YTS video file path: "{dn}/{dn}.mp4" — tells webtor which file to play without scanning the torrent
-    const path = dn ? `${dn}/${dn}.mp4` : undefined;
+    // Only provide path hint for YTS-style torrents (have "YTS" in dn and use {name}/{name}.mp4 structure).
+    // Brazilian/other releases use flat structure (file.mkv) — letting webtor auto-detect is faster.
+    const isYTS = /yts/i.test(dn);
+    const path = isYTS ? `${dn}/${dn}.mp4` : undefined;
 
     // NOTE: subtitles via webtor.io URLs were removed — they require authenticated requests
     // inside the iframe which fail on mobile (third-party cookie restrictions → CSRF error).
