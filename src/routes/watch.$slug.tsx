@@ -532,6 +532,12 @@ function StreamModalRD({ magnet, title, poster, onClose, onFallback }: {
       if (!cancelRef.current) onFallback()
     }
 
+    const fetchWithTimeout = (url: string, opts: RequestInit, ms = 12000) => {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), ms)
+      return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t))
+    }
+
     const start = async () => {
       setPhase({ kind: 'loading', msg: '⚡ Conectando ao Real-Debrid...' })
       try {
@@ -539,7 +545,7 @@ function StreamModalRD({ magnet, title, poster, onClose, onFallback }: {
         // The server reconstructs the full magnet from the hash + dn (display name).
         const hashMatch = magnet.match(/urn:btih:([a-fA-F0-9]{40}|[a-zA-Z2-7]{32})/i)
         const infoHash = hashMatch ? hashMatch[1].toLowerCase() : ''
-        const res = await fetch('/api/rd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'start', hash: infoHash, dn: title }) })
+        const res = await fetchWithTimeout('/api/rd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'start', hash: infoHash, dn: title }) })
         const r = await res.json() as { status: string; url?: string; id?: string; message?: string; progress?: number; seeders?: number }
         if (cancelRef.current) return
         if (r.status === 'ready')  { setPhase({ kind: 'ready', url: r.url! }); return }
@@ -550,7 +556,7 @@ function StreamModalRD({ magnet, title, poster, onClose, onFallback }: {
         setPhase({ kind: 'loading', msg: `${STATUS_MSG[r.status] ?? '⚡ Aguardando...'} ${(r.progress ?? 0) > 0 ? r.progress + '%' : ''}`.trim(), progress: r.progress })
         poll(r.id!)
       } catch (e: any) {
-        // Network / server-fn error → fall back to webtor
+        // Network / server-fn error (including timeout) → fall back to webtor
         await fallback()
       }
     }
