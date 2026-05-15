@@ -682,6 +682,7 @@ function StreamModalWebtor({ magnet, title, poster, imdbId, onClose }: { magnet:
     // all subtitle tracks via the CC button. With userlang='pt', Portuguese SRTs that
     // are embedded in the torrent are auto-selected without any user action.
     // If imdbId is available, webtor also fetches from OpenSubtitles as a fallback.
+    // v2
     const cfg: Record<string, any> = {
       id: cid,
       magnet: enrichedMagnet,
