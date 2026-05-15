@@ -650,7 +650,7 @@ function injectTrackers(magnet: string): string {
   return magnet + toAdd.map(t => '&tr=' + encodeURIComponent(t)).join('');
 }
 
-function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string; title: string; poster?: string; onClose: () => void }) {
+function StreamModalWebtor({ magnet, title, poster, imdbId, onClose }: { magnet: string; title: string; poster?: string; imdbId?: string; onClose: () => void }) {
   const cid = useRef('wt' + Math.random().toString(36).slice(2, 8)).current;
 
   useEffect(() => {
@@ -668,10 +668,6 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
     const isYTS = /yts/i.test(dn);
     const path = isYTS ? `${dn}/${dn}.mp4` : undefined;
 
-    // NOTE: subtitles via webtor.io URLs were removed — they require authenticated requests
-    // inside the iframe which fail on mobile (third-party cookie restrictions → CSRF error).
-    // Webtor's built-in CC button still works for users who need subtitles.
-
     // Inject iframe fill-style
     const styleEl = document.createElement('style');
     styleEl.id = cid + '_s';
@@ -681,15 +677,25 @@ function StreamModalWebtor({ magnet, title, poster, onClose }: { magnet: string;
     // Fresh SDK init (remove old script so it re-executes from cache)
     document.querySelectorAll(`script[src="${WEBTOR_SDK}"]`).forEach(s => s.remove());
 
+    // userlang: webtor uses this to auto-select the preferred subtitle track.
+    // The webtor server downloads the full torrent (including SRT files) and serves
+    // all subtitle tracks via the CC button. With userlang='pt', Portuguese SRTs that
+    // are embedded in the torrent are auto-selected without any user action.
+    // If imdbId is available, webtor also fetches from OpenSubtitles as a fallback.
     const cfg: Record<string, any> = {
       id: cid,
       magnet: enrichedMagnet,
       width: '100%',
       height: '100%',
       autoplay: true,
+      userlang: 'pt',
     };
-    if (poster) cfg.poster = poster;
-    if (path)   cfg.path   = path;
+    if (poster)  cfg.poster  = poster;
+    if (path)    cfg.path    = path;
+    if (imdbId) {
+      cfg.imdbId   = imdbId;
+      cfg.features = { opensubtitles: true };
+    }
 
     (window as any).webtor = [cfg];
     const script = document.createElement('script');
@@ -871,6 +877,7 @@ function Watch() {
           magnet={streamMagnet}
           title={displayTitle}
           poster={title?.poster}
+          imdbId={title?.imdb_id ?? undefined}
           onClose={() => setStreamMagnet(null)}
         />
       )}
