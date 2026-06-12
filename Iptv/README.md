@@ -41,8 +41,24 @@ npm install
 npm run dev
 ```
 
-- Público: `http://localhost:5173/worldcup/`
-- Admin: `http://localhost:5173/worldcup/admin.html` (chave de admin em dev: **`admin`**)
+- Público: `http://localhost:5173/`
+- Admin: `http://localhost:5173/admin.html` (chave de admin em dev: **`admin`**)
+
+## Ver um preview rápido no Vercel (sem precisar do login IPTV)
+
+Como o app de filme já está conectado ao Vercel pelo mesmo repositório, dá pra
+importar **só esta pasta** como um projeto novo:
+
+1. Vercel → **Add New… → Project** → importe o repositório `kind-connect-33323bce`.
+2. Em **Root Directory**, selecione **`Iptv`**.
+3. Framework: **Vite** (detecta sozinho). Build: `npm run build`. Output: `dist`.
+4. (Opcional) Em Environment Variables, defina **`ADMIN_KEY`** para liberar o
+   painel admin. Deploy.
+
+Você verá: a tela pública ("aguardando transmissão"), o gate de senha do admin e
+a tela de conectar provedor. Para **navegar canais/filmes de verdade** é preciso
+`ADMIN_KEY` + login IPTV; para a sincronia **admin→público** funcionar 100%, use
+**Cloudflare Pages + KV** (o Vercel não tem o KV deste projeto).
 
 ## Deploy (Cloudflare Pages — recomendado)
 

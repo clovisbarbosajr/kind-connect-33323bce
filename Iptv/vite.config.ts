@@ -62,8 +62,9 @@ function send(res: any, status: number, obj: unknown) {
 }
 
 export default defineConfig({
-  // Served under /worldcup on your domain. Change if you mount it elsewhere.
-  base: "/worldcup/",
+  // Relative base: works both at the domain root (standalone Vercel/CF project)
+  // and mounted under a subpath like /worldcup on your own domain.
+  base: "./",
   plugins: [react(), devApi()],
   build: {
     rollupOptions: {
