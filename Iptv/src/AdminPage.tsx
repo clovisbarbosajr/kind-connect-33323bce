@@ -123,9 +123,10 @@ function AdminDashboard({ provider }: { provider: Provider }) {
   const toggleFav = (id: number) => setFavorites(new Set(store.toggleFavorite(id)));
 
   async function broadcast(np: NonNullable<NowPlaying>) {
-    // Just set the shared "now playing" — no auto-preview, so the single
-    // provider connection stays free for the public viewer.
+    // Set the shared "now playing" AND open the preview so the admin sees the
+    // video immediately.
     setOnAir(np);
+    setPreview(true);
     const ok = await setNowPlaying(np);
     setFlash(ok ? `No ar: ${np.title}` : `Falha ao salvar — tente de novo`);
     setTimeout(() => setFlash(null), 2500);
