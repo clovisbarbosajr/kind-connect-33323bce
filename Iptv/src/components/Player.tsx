@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Hls from "hls.js";
+import mpegts from "mpegts.js";
 
 type Track = { id: number; label: string };
 
@@ -18,6 +19,7 @@ export function Player({ src, live = true, poster, title, onClose, enableSubtitl
   const wrapRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const mpegtsRef = useRef<ReturnType<typeof mpegts.createPlayer> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -110,7 +112,22 @@ export function Player({ src, live = true, poster, title, onClose, enableSubtitl
       });
     };
 
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    if (live && mpegts.isSupported()) {
+      // Live = continuous MPEG-TS (.ts) via mpegts.js — the right way to play
+      // Xtream live in a browser (the .m3u8 ships ENDLIST and stops).
+      const player = mpegts.createPlayer(
+        { type: "mpegts", isLive: true, url: src },
+        { enableWorker: true, liveBufferLatencyChasing: true, lazyLoad: false, stashInitialSize: 128 },
+      );
+      mpegtsRef.current = player;
+      player.attachMediaElement(video);
+      player.on(mpegts.Events.ERROR, () => {
+        setError("Não foi possível abrir o canal (offline ou limite de conexões).");
+        setLoading(false);
+      });
+      player.load();
+      Promise.resolve(player.play()).catch(() => {});
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       // Safari / iOS native HLS — plays cross-origin media without needing CORS.
       video.src = src;
       video.play().catch(() => {});
@@ -127,6 +144,12 @@ export function Player({ src, live = true, poster, title, onClose, enableSubtitl
       video.removeEventListener("loadedmetadata", readNativeTracks);
       hlsRef.current?.destroy();
       hlsRef.current = null;
+      try {
+        mpegtsRef.current?.destroy();
+      } catch {
+        /* ignore */
+      }
+      mpegtsRef.current = null;
       video.removeAttribute("src");
       video.load();
     };

@@ -6,8 +6,8 @@ export const TEST_PROVIDER: Provider = {
   id: "kakito",
   name: "Teste",
   host: "https://kakito.xyz",
-  username: "clovisteste1",
-  password: "gpuiyt21",
+  username: "clovisteste2",
+  password: "b6mstb14",
   direct: true,
 };
 
