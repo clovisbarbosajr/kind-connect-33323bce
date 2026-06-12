@@ -15,16 +15,15 @@ export type Provider = {
   direct?: boolean; // talk straight to the provider over HTTPS (no proxy)
 };
 
-// Base URL for API + streams. In direct mode we force HTTPS so an HTTPS page
-// can load it without mixed-content errors (panels expose port 443).
+// The provider is HTTP-only. An HTTPS page can't read HTTP directly (browser
+// "mixed content" rule), so in direct mode we route through a public HTTPS
+// CORS proxy that fetches the HTTP provider for us.
+const CORS_PROXY = "https://corsproxy.io/?url=";
+const proxied = (url: string) => `${CORS_PROXY}${encodeURIComponent(url)}`;
+
 function base(p: Provider): string {
   let h = p.host.trim().replace(/\/+$/, "");
-  if (p.direct) {
-    if (/^http:\/\//i.test(h)) h = h.replace(/^http:\/\//i, "https://");
-    else if (!/^https?:\/\//i.test(h)) h = "https://" + h;
-  } else if (!/^https?:\/\//i.test(h)) {
-    h = "http://" + h;
-  }
+  if (!/^https?:\/\//i.test(h)) h = "http://" + h;
   return h;
 }
 
@@ -72,8 +71,8 @@ function endpoint(p: Provider, params: Record<string, string>): string {
   u.searchParams.set("username", p.username);
   u.searchParams.set("password", p.password);
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
-  // Direct: browser hits the provider straight (needs CORS). Otherwise proxy.
-  if (p.direct) return u.toString();
+  // Direct: route the HTTP provider through the HTTPS CORS proxy. Otherwise our own proxy.
+  if (p.direct) return proxied(u.toString());
   return `/api/xtream?url=${encodeURIComponent(u.toString())}`;
 }
 
@@ -123,16 +122,21 @@ export const xtream = {
     }),
 };
 
-// ---- DIRECT stream URLs (provider -> browser, never proxied) ----
-// Live defaults to HLS (.m3u8) so it plays natively in Safari/iOS without CORS.
-export const liveUrl = (p: Provider, streamId: number, ext = "m3u8") =>
-  `${base(p)}/live/${p.username}/${p.password}/${streamId}.${ext}`;
+// ---- Stream URLs (routed through the HTTPS proxy in direct mode) ----
+export const liveUrl = (p: Provider, streamId: number, ext = "m3u8") => {
+  const u = `${base(p)}/live/${p.username}/${p.password}/${streamId}.${ext}`;
+  return p.direct ? proxied(u) : u;
+};
 
-export const movieUrl = (p: Provider, streamId: number, ext: string) =>
-  `${base(p)}/movie/${p.username}/${p.password}/${streamId}.${ext}`;
+export const movieUrl = (p: Provider, streamId: number, ext: string) => {
+  const u = `${base(p)}/movie/${p.username}/${p.password}/${streamId}.${ext}`;
+  return p.direct ? proxied(u) : u;
+};
 
-export const seriesEpisodeUrl = (p: Provider, episodeId: string | number, ext: string) =>
-  `${base(p)}/series/${p.username}/${p.password}/${episodeId}.${ext}`;
+export const seriesEpisodeUrl = (p: Provider, episodeId: string | number, ext: string) => {
+  const u = `${base(p)}/series/${p.username}/${p.password}/${episodeId}.${ext}`;
+  return p.direct ? proxied(u) : u;
+};
 
 // EPG titles/descriptions come base64-encoded.
 export const decodeB64 = (s?: string): string => {
