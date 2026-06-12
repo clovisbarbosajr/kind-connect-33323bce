@@ -94,6 +94,7 @@ function Login({
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [direct, setDirect] = useState(true);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -105,6 +106,7 @@ function Login({
       host: host.trim().replace(/\/+$/, ""),
       username: username.trim(),
       password: password.trim(),
+      direct,
     };
     try {
       const auth = await xtream.auth(p);
@@ -147,6 +149,10 @@ function Login({
           <input placeholder="URL do servidor — http://servidor.com:8080" value={host} onChange={(e) => setHost(e.target.value)} required />
           <input placeholder="Usuário" value={username} onChange={(e) => setUsername(e.target.value)} required />
           <input placeholder="Senha" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <label className="check-row">
+            <input type="checkbox" checked={direct} onChange={(e) => setDirect(e.target.checked)} />
+            Conexão direta (HTTPS, sem proxy) — recomendado
+          </label>
           {err && <div className="err">{err}</div>}
           <button className="primary" disabled={busy}>
             {busy ? "Conectando…" : "Entrar"}
@@ -274,15 +280,13 @@ function AdminDashboard({
   const toggleFav = (id: number) => setFavorites(new Set(store.toggleFavorite(id)));
 
   async function broadcast(np: NonNullable<NowPlaying>) {
+    // Optimistic: show the preview immediately so the admin can watch even if
+    // the shared-state POST isn't available (e.g. no KV on this preview host).
+    setOnAir(np);
+    setPreview(true);
     const ok = await setNowPlaying(np);
-    if (ok) {
-      setOnAir(np);
-      setFlash(`No ar: ${np.title}`);
-      setTimeout(() => setFlash(null), 2500);
-    } else {
-      setFlash("Falha ao transmitir (chave de admin?).");
-      setTimeout(() => setFlash(null), 3000);
-    }
+    setFlash(ok ? `No ar: ${np.title}` : `Pré-visualizando: ${np.title}`);
+    setTimeout(() => setFlash(null), 2500);
   }
   const airLive = (s: LiveStream) =>
     broadcast({ url: liveUrl(provider, s.stream_id), title: s.name, live: true, poster: s.stream_icon, ts: Date.now() });

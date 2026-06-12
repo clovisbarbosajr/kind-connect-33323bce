@@ -38,6 +38,8 @@ img { display: block; }
 .primary:hover { background: var(--accent2); }
 .primary:disabled { opacity: .6; }
 .err { color: #ff6b6b; font-size: 13px; }
+.check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.check-row input { width: 16px; height: 16px; accent-color: var(--accent); }
 .profiles { margin: 14px 0; }
 .profile-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .chip { background: var(--card2); border: 1px solid var(--line); color: var(--text); padding: 8px 14px; border-radius: 999px; font-size: 13px; }

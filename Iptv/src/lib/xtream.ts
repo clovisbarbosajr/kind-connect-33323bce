@@ -12,7 +12,21 @@ export type Provider = {
   host: string; // http://host:port (no trailing slash)
   username: string;
   password: string;
+  direct?: boolean; // talk straight to the provider over HTTPS (no proxy)
 };
+
+// Base URL for API + streams. In direct mode we force HTTPS so an HTTPS page
+// can load it without mixed-content errors (panels expose port 443).
+function base(p: Provider): string {
+  let h = p.host.trim().replace(/\/+$/, "");
+  if (p.direct) {
+    if (/^http:\/\//i.test(h)) h = h.replace(/^http:\/\//i, "https://");
+    else if (!/^https?:\/\//i.test(h)) h = "https://" + h;
+  } else if (!/^https?:\/\//i.test(h)) {
+    h = "http://" + h;
+  }
+  return h;
+}
 
 export type Category = { category_id: string; category_name: string };
 
@@ -54,10 +68,12 @@ export type EpgEntry = {
 };
 
 function endpoint(p: Provider, params: Record<string, string>): string {
-  const u = new URL(`${p.host.replace(/\/+$/, "")}/player_api.php`);
+  const u = new URL(`${base(p)}/player_api.php`);
   u.searchParams.set("username", p.username);
   u.searchParams.set("password", p.password);
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+  // Direct: browser hits the provider straight (needs CORS). Otherwise proxy.
+  if (p.direct) return u.toString();
   return `/api/xtream?url=${encodeURIComponent(u.toString())}`;
 }
 
@@ -68,7 +84,7 @@ async function call<T>(p: Provider, params: Record<string, string>): Promise<T> 
   } catch {
     /* ignore */
   }
-  const res = await fetch(endpoint(p, params), { headers: { "x-admin-key": key } });
+  const res = await fetch(endpoint(p, params), { headers: p.direct ? {} : { "x-admin-key": key } });
   if (res.status === 401) throw new Error("UNAUTHORIZED");
   if (!res.ok) throw new Error(`Xtream HTTP ${res.status}`);
   const text = await res.text();
@@ -108,16 +124,15 @@ export const xtream = {
 };
 
 // ---- DIRECT stream URLs (provider -> browser, never proxied) ----
-const clean = (p: Provider) => p.host.replace(/\/+$/, "");
-
+// Live defaults to HLS (.m3u8) so it plays natively in Safari/iOS without CORS.
 export const liveUrl = (p: Provider, streamId: number, ext = "m3u8") =>
-  `${clean(p)}/live/${p.username}/${p.password}/${streamId}.${ext}`;
+  `${base(p)}/live/${p.username}/${p.password}/${streamId}.${ext}`;
 
 export const movieUrl = (p: Provider, streamId: number, ext: string) =>
-  `${clean(p)}/movie/${p.username}/${p.password}/${streamId}.${ext}`;
+  `${base(p)}/movie/${p.username}/${p.password}/${streamId}.${ext}`;
 
 export const seriesEpisodeUrl = (p: Provider, episodeId: string | number, ext: string) =>
-  `${clean(p)}/series/${p.username}/${p.password}/${episodeId}.${ext}`;
+  `${base(p)}/series/${p.username}/${p.password}/${episodeId}.${ext}`;
 
 // EPG titles/descriptions come base64-encoded.
 export const decodeB64 = (s?: string): string => {
