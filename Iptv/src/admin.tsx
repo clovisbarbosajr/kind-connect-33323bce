@@ -1,12 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { PublicView } from "./Public";
+import { AdminApp } from "./AdminPage";
 import "./styles.css";
 
-// PUBLIC page (/worldcup/). Viewers only watch what the admin is airing.
-// No login / admin code is bundled here.
+// ADMIN page (/worldcup/admin.html). Key-gated. Not linked from the public page.
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <PublicView />
+    <AdminApp />
   </StrictMode>,
 );

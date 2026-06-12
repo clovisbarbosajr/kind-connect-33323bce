@@ -4,26 +4,26 @@ import {
   liveUrl,
   movieUrl,
   seriesEpisodeUrl,
-  decodeB64,
   type Provider,
   type Category,
   type LiveStream,
   type VodStream,
   type Series,
-  type EpgEntry,
 } from "./lib/xtream";
 import { store, uid } from "./lib/store";
 import { Player } from "./components/Player";
+import { getNowPlaying, setNowPlaying, adminKey, type NowPlaying } from "./lib/broadcast";
 
-type Tab = "live" | "movies" | "series" | "favorites";
+/* ============================ ADMIN ============================ */
 
-export function App() {
+export function AdminApp() {
+  const [unlocked, setUnlocked] = useState(false);
   const [provider, setProvider] = useState<Provider | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);
   const [booted, setBooted] = useState(false);
 
-  // Auto-login from saved profile.
   useEffect(() => {
+    setUnlocked(!!adminKey.get());
     setProviders(store.getProviders());
     const active = store.getActive();
     if (active) setProvider(active);
@@ -43,13 +43,39 @@ export function App() {
   }, []);
 
   if (!booted) return <div className="boot">Carregando…</div>;
-  if (!provider)
-    return <Login providers={providers} onLogin={onLogin} onPickExisting={onLogin} />;
-
-  return <Dashboard provider={provider} onLogout={onLogout} onSwitch={onLogin} providers={providers} />;
+  if (!unlocked) return <AdminGate onUnlock={() => setUnlocked(true)} />;
+  if (!provider) return <Login providers={providers} onLogin={onLogin} onPickExisting={onLogin} />;
+  return <AdminDashboard provider={provider} providers={providers} onLogout={onLogout} onSwitch={onLogin} />;
 }
 
-/* ----------------------------- Login ----------------------------- */
+function AdminGate({ onUnlock }: { onUnlock: () => void }) {
+  const [key, setKey] = useState("");
+  return (
+    <div className="login">
+      <div className="login-card">
+        <h1>
+          <span className="logo-dot" /> Painel Admin
+        </h1>
+        <p className="muted">Acesso restrito. Digite a chave de administrador.</p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            adminKey.set(key.trim());
+            onUnlock();
+          }}
+        >
+          <input type="password" placeholder="Chave de admin" value={key} onChange={(e) => setKey(e.target.value)} autoFocus />
+          <button className="primary">Entrar</button>
+        </form>
+        <p className="muted small">
+          Definida na variável de ambiente <code>ADMIN_KEY</code> do deploy (em dev: "admin").
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------- Login (IPTV) ----------------------------- */
 
 function Login({
   providers,
@@ -73,18 +99,21 @@ function Login({
     setBusy(true);
     const p: Provider = {
       id: uid(),
-      name: name.trim() || new URL(host).hostname,
+      name: name.trim() || safeHost(host),
       host: host.trim().replace(/\/+$/, ""),
       username: username.trim(),
       password: password.trim(),
     };
     try {
       const auth = await xtream.auth(p);
-      if (!auth?.user_info || auth.user_info.auth === 0)
-        throw new Error("Usuário ou senha inválidos.");
+      if (!auth?.user_info || auth.user_info.auth === 0) throw new Error("Usuário ou senha inválidos.");
       onLogin(p);
     } catch (e: any) {
-      setErr(e?.message ?? "Falha ao conectar. Verifique a URL/credenciais.");
+      setErr(
+        e?.message === "UNAUTHORIZED"
+          ? "Chave de admin rejeitada pelo servidor."
+          : e?.message ?? "Falha ao conectar. Verifique a URL/credenciais.",
+      );
     } finally {
       setBusy(false);
     }
@@ -94,9 +123,9 @@ function Login({
     <div className="login">
       <div className="login-card">
         <h1>
-          <span className="logo-dot" /> WorldCup IPTV
+          <span className="logo-dot" /> Conectar provedor
         </h1>
-        <p className="muted">Conecte seu provedor (Xtream Codes). Conexão direta — sem restream.</p>
+        <p className="muted">Xtream Codes. O vídeo vai direto do provedor para o espectador — sem restream.</p>
 
         {providers.length > 0 && (
           <div className="profiles">
@@ -113,38 +142,32 @@ function Login({
 
         <form onSubmit={submit}>
           <input placeholder="Nome do perfil (opcional)" value={name} onChange={(e) => setName(e.target.value)} />
-          <input
-            placeholder="URL do servidor — http://servidor.com:8080"
-            value={host}
-            onChange={(e) => setHost(e.target.value)}
-            required
-          />
+          <input placeholder="URL do servidor — http://servidor.com:8080" value={host} onChange={(e) => setHost(e.target.value)} required />
           <input placeholder="Usuário" value={username} onChange={(e) => setUsername(e.target.value)} required />
-          <input
-            placeholder="Senha"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <input placeholder="Senha" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           {err && <div className="err">{err}</div>}
           <button className="primary" disabled={busy}>
             {busy ? "Conectando…" : "Entrar"}
           </button>
         </form>
-        <p className="muted small">
-          As credenciais ficam salvas só no seu navegador. O vídeo vai direto do provedor para você.
-        </p>
       </div>
     </div>
   );
 }
 
-/* --------------------------- Dashboard --------------------------- */
+function safeHost(h: string): string {
+  try {
+    return new URL(h).hostname;
+  } catch {
+    return "Provedor";
+  }
+}
 
-type PlayTarget = { url: string; title: string; live: boolean; poster?: string; streamId?: number } | null;
+/* --------------------------- Admin Dashboard --------------------------- */
 
-function Dashboard({
+type Tab = "live" | "movies" | "series" | "favorites";
+
+function AdminDashboard({
   provider,
   providers,
   onLogout,
@@ -162,12 +185,18 @@ function Dashboard({
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
-  const [play, setPlay] = useState<PlayTarget>(null);
   const [seriesView, setSeriesView] = useState<Series | null>(null);
 
-  useEffect(() => setFavorites(store.getFavorites()), []);
+  const [onAir, setOnAir] = useState<NowPlaying>(null);
+  const [preview, setPreview] = useState(false);
+  const [flash, setFlash] = useState<string | null>(null);
 
-  // Load categories whenever tab changes.
+  useEffect(() => setFavorites(store.getFavorites()), []);
+  useEffect(() => {
+    getNowPlaying().then(setOnAir).catch(() => {});
+  }, []);
+
+  // categories per tab
   useEffect(() => {
     if (tab === "favorites") {
       setCategories([]);
@@ -196,7 +225,7 @@ function Dashboard({
     };
   }, [tab, provider]);
 
-  // Load items for the active category.
+  // items per category
   useEffect(() => {
     if (tab === "favorites") {
       let cancelled = false;
@@ -238,30 +267,54 @@ function Dashboard({
     return items.filter((i) => (i.name ?? "").toLowerCase().includes(q));
   }, [items, search]);
 
-  const toggleFav = (streamId: number) => setFavorites(new Set(store.toggleFavorite(streamId)));
+  const toggleFav = (id: number) => setFavorites(new Set(store.toggleFavorite(id)));
 
-  function openLive(s: LiveStream) {
-    store.pushRecent(s.stream_id);
-    setPlay({ url: liveUrl(provider, s.stream_id), title: s.name, live: true, poster: s.stream_icon, streamId: s.stream_id });
+  async function broadcast(np: NonNullable<NowPlaying>) {
+    const ok = await setNowPlaying(np);
+    if (ok) {
+      setOnAir(np);
+      setFlash(`No ar: ${np.title}`);
+      setTimeout(() => setFlash(null), 2500);
+    } else {
+      setFlash("Falha ao transmitir (chave de admin?).");
+      setTimeout(() => setFlash(null), 3000);
+    }
   }
-  function openMovie(s: VodStream) {
-    setPlay({
+  const airLive = (s: LiveStream) =>
+    broadcast({ url: liveUrl(provider, s.stream_id), title: s.name, live: true, poster: s.stream_icon, ts: Date.now() });
+  const airMovie = (s: VodStream) =>
+    broadcast({
       url: movieUrl(provider, s.stream_id, s.container_extension || "mp4"),
       title: s.name,
       live: false,
       poster: s.stream_icon || s.cover,
+      ts: Date.now(),
     });
+
+  async function stop() {
+    if (await setNowPlaying(null)) {
+      setOnAir(null);
+      setPreview(false);
+    }
   }
 
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <span className="logo-dot" /> WorldCup IPTV
+          <span className="logo-dot" /> Admin · WorldCup
         </div>
         <nav className="tabs">
           {(["live", "movies", "series", "favorites"] as Tab[]).map((t) => (
-            <button key={t} className={tab === t ? "active" : ""} onClick={() => { setTab(t); setSeriesView(null); setSearch(""); }}>
+            <button
+              key={t}
+              className={tab === t ? "active" : ""}
+              onClick={() => {
+                setTab(t);
+                setSeriesView(null);
+                setSearch("");
+              }}
+            >
               {t === "live" ? "Ao Vivo" : t === "movies" ? "Filmes" : t === "series" ? "Séries" : "★ Favoritos"}
             </button>
           ))}
@@ -272,15 +325,48 @@ function Dashboard({
         </div>
       </header>
 
+      {/* On-air banner */}
+      <div className={`onair ${onAir ? "live" : ""}`}>
+        {onAir ? (
+          <>
+            <span className="onair-dot" /> No ar: <strong>{onAir.title}</strong>
+            <button className="ghost" onClick={() => setPreview((p) => !p)}>
+              {preview ? "Ocultar prévia" : "Pré-visualizar"}
+            </button>
+            <button className="ghost danger" onClick={stop}>
+              Parar transmissão
+            </button>
+          </>
+        ) : (
+          <span className="muted">Nada no ar. Clique em "Transmitir" em qualquer canal/filme.</span>
+        )}
+        <span className="onair-hint muted small">
+          Público assiste em <code>/worldcup</code>
+        </span>
+      </div>
+
+      {preview && onAir && (
+        <div className="admin-preview">
+          <Player
+            key={onAir.url}
+            src={onAir.url}
+            live={onAir.live}
+            poster={onAir.poster}
+            title={onAir.title}
+            enableSubtitles={!onAir.live}
+            onClose={() => setPreview(false)}
+          />
+          <p className="muted small">A prévia consome 1 conexão do seu plano. Feche para liberar.</p>
+        </div>
+      )}
+
+      {flash && <div className="flash">{flash}</div>}
+
       <div className="body">
         {tab !== "favorites" && (
           <aside className="sidebar">
             {categories.map((c) => (
-              <button
-                key={c.category_id}
-                className={activeCat === c.category_id ? "active" : ""}
-                onClick={() => setActiveCat(c.category_id)}
-              >
+              <button key={c.category_id} className={activeCat === c.category_id ? "active" : ""} onClick={() => setActiveCat(c.category_id)}>
                 {c.category_name}
               </button>
             ))}
@@ -291,24 +377,17 @@ function Dashboard({
           {loading && <div className="grid-msg">Carregando…</div>}
           {!loading && filtered.length === 0 && <div className="grid-msg">Nada encontrado.</div>}
 
-          {!loading && tab === "live" && (
+          {!loading && (tab === "live" || tab === "favorites") && (
             <div className="grid live-grid">
               {filtered.map((s: LiveStream) => (
                 <LiveCard
                   key={s.stream_id}
                   s={s}
                   fav={favorites.has(s.stream_id)}
-                  onPlay={() => openLive(s)}
+                  onAir={onAir?.url === liveUrl(provider, s.stream_id)}
+                  onBroadcast={() => airLive(s)}
                   onFav={() => toggleFav(s.stream_id)}
                 />
-              ))}
-            </div>
-          )}
-
-          {!loading && tab === "favorites" && (
-            <div className="grid live-grid">
-              {filtered.map((s: LiveStream) => (
-                <LiveCard key={s.stream_id} s={s} fav onPlay={() => openLive(s)} onFav={() => toggleFav(s.stream_id)} />
               ))}
             </div>
           )}
@@ -316,7 +395,7 @@ function Dashboard({
           {!loading && tab === "movies" && (
             <div className="grid poster-grid">
               {filtered.map((s: VodStream) => (
-                <PosterCard key={s.stream_id} title={s.name} img={s.stream_icon || s.cover} onClick={() => openMovie(s)} />
+                <PosterCard key={s.stream_id} title={s.name} img={s.stream_icon || s.cover} onClick={() => airMovie(s)} actionLabel="Transmitir" />
               ))}
             </div>
           )}
@@ -324,7 +403,7 @@ function Dashboard({
           {!loading && tab === "series" && !seriesView && (
             <div className="grid poster-grid">
               {filtered.map((s: Series) => (
-                <PosterCard key={s.series_id} title={s.name} img={s.cover} onClick={() => setSeriesView(s)} />
+                <PosterCard key={s.series_id} title={s.name} img={s.cover} onClick={() => setSeriesView(s)} actionLabel="Abrir" />
               ))}
             </div>
           )}
@@ -334,24 +413,32 @@ function Dashboard({
               provider={provider}
               series={seriesView}
               onBack={() => setSeriesView(null)}
-              onPlay={(url, title) => setPlay({ url, title, live: false, poster: seriesView.cover })}
+              onBroadcast={(url, title) => broadcast({ url, title, live: false, poster: seriesView.cover, ts: Date.now() })}
             />
           )}
         </main>
       </div>
-
-      {play && (
-        <PlayerModal target={play} provider={provider} onClose={() => setPlay(null)} />
-      )}
     </div>
   );
 }
 
 /* ----------------------------- Cards ----------------------------- */
 
-function LiveCard({ s, fav, onPlay, onFav }: { s: LiveStream; fav: boolean; onPlay: () => void; onFav: () => void }) {
+function LiveCard({
+  s,
+  fav,
+  onAir,
+  onBroadcast,
+  onFav,
+}: {
+  s: LiveStream;
+  fav: boolean;
+  onAir: boolean;
+  onBroadcast: () => void;
+  onFav: () => void;
+}) {
   return (
-    <div className="live-card" onClick={onPlay}>
+    <div className={`live-card ${onAir ? "is-onair" : ""}`} onClick={onBroadcast}>
       <div className="live-logo">
         {s.stream_icon ? <img src={s.stream_icon} alt="" loading="lazy" /> : <div className="logo-fallback">{s.name?.[0]}</div>}
       </div>
@@ -366,15 +453,17 @@ function LiveCard({ s, fav, onPlay, onFav }: { s: LiveStream; fav: boolean; onPl
       >
         ★
       </button>
+      <div className="card-action">{onAir ? "● No ar" : "Transmitir"}</div>
     </div>
   );
 }
 
-function PosterCard({ title, img, onClick }: { title: string; img?: string; onClick: () => void }) {
+function PosterCard({ title, img, onClick, actionLabel }: { title: string; img?: string; onClick: () => void; actionLabel: string }) {
   return (
     <div className="poster-card" onClick={onClick}>
       <div className="poster">
         {img ? <img src={img} alt="" loading="lazy" /> : <div className="logo-fallback">{title?.[0]}</div>}
+        <span className="poster-action">{actionLabel}</span>
       </div>
       <div className="poster-title">{title}</div>
     </div>
@@ -387,12 +476,12 @@ function SeriesDetail({
   provider,
   series,
   onBack,
-  onPlay,
+  onBroadcast,
 }: {
   provider: Provider;
   series: Series;
   onBack: () => void;
-  onPlay: (url: string, title: string) => void;
+  onBroadcast: (url: string, title: string) => void;
 }) {
   const [info, setInfo] = useState<any>(null);
   const [season, setSeason] = useState<string>("");
@@ -400,8 +489,7 @@ function SeriesDetail({
   useEffect(() => {
     xtream.seriesInfo(provider, series.series_id).then((d) => {
       setInfo(d);
-      const seasons = Object.keys(d?.episodes ?? {});
-      setSeason(seasons[0] ?? "");
+      setSeason(Object.keys(d?.episodes ?? {})[0] ?? "");
     });
   }, [provider, series.series_id]);
 
@@ -433,69 +521,16 @@ function SeriesDetail({
           <button
             key={ep.id}
             className="episode"
-            onClick={() => onPlay(seriesEpisodeUrl(provider, ep.id, ep.container_extension || "mp4"), `${series.name} — ${ep.title}`)}
+            onClick={() => onBroadcast(seriesEpisodeUrl(provider, ep.id, ep.container_extension || "mp4"), `${series.name} — ${ep.title}`)}
           >
             <span className="ep-num">{ep.episode_num}</span>
             <span className="ep-title">{ep.title}</span>
-            <span className="ep-play">▶</span>
+            <span className="ep-play">Transmitir ▶</span>
           </button>
         ))}
       </div>
     </div>
   );
-}
-
-/* --------------------------- Player modal --------------------------- */
-
-function PlayerModal({ target, provider, onClose }: { target: NonNullable<PlayTarget>; provider: Provider; onClose: () => void }) {
-  const [epg, setEpg] = useState<EpgEntry[]>([]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    if (target.live && target.streamId) {
-      xtream
-        .shortEpg(provider, target.streamId)
-        .then((d) => setEpg(d.epg_listings ?? []))
-        .catch(() => setEpg([]));
-    }
-  }, [provider, target]);
-
-  return (
-    <div className="modal" onClick={onClose}>
-      <div className="modal-inner" onClick={(e) => e.stopPropagation()}>
-        <button className="modal-close" onClick={onClose}>
-          ✕
-        </button>
-        <Player src={target.url} live={target.live} poster={target.poster} title={target.title} />
-        <div className="now-playing">
-          <h3>{target.title}</h3>
-          {target.live && epg.length > 0 && (
-            <ul className="epg">
-              {epg.slice(0, 5).map((e, i) => (
-                <li key={i} className={i === 0 ? "live-now" : ""}>
-                  <span className="epg-time">
-                    {fmt(e.start)} – {fmt(e.end)}
-                  </span>
-                  <span className="epg-title">{decodeB64(e.title)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function fmt(s: string): string {
-  // Xtream EPG times come as "YYYY-MM-DD HH:MM:SS".
-  const t = s?.split(" ")[1]?.slice(0, 5);
-  return t ?? "";
 }
 
 /* -------------------------- Profile menu -------------------------- */
@@ -523,11 +558,17 @@ function ProfileMenu({
           {providers
             .filter((p) => p.id !== provider.id)
             .map((p) => (
-              <button key={p.id} onClick={() => { onSwitch(p); setOpen(false); }}>
+              <button
+                key={p.id}
+                onClick={() => {
+                  onSwitch(p);
+                  setOpen(false);
+                }}
+              >
                 Trocar para {p.name}
               </button>
             ))}
-          <button onClick={onLogout}>Adicionar / Sair</button>
+          <button onClick={onLogout}>Adicionar / Sair do provedor</button>
         </div>
       )}
     </div>

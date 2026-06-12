@@ -62,7 +62,14 @@ function endpoint(p: Provider, params: Record<string, string>): string {
 }
 
 async function call<T>(p: Provider, params: Record<string, string>): Promise<T> {
-  const res = await fetch(endpoint(p, params));
+  let key = "";
+  try {
+    key = sessionStorage.getItem("iptv.adminKey") ?? "";
+  } catch {
+    /* ignore */
+  }
+  const res = await fetch(endpoint(p, params), { headers: { "x-admin-key": key } });
+  if (res.status === 401) throw new Error("UNAUTHORIZED");
   if (!res.ok) throw new Error(`Xtream HTTP ${res.status}`);
   const text = await res.text();
   try {

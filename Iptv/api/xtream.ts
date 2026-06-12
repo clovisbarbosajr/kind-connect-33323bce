@@ -9,6 +9,11 @@ export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") return res.status(204).end();
 
+  // Admin-only (the public page never browses the catalogue).
+  const key = (req.headers["x-admin-key"] as string) ?? "";
+  if (!process.env.ADMIN_KEY || key !== process.env.ADMIN_KEY)
+    return res.status(401).json({ error: "unauthorized" });
+
   const target = req.query?.url as string | undefined;
   if (!target) return res.status(400).json({ error: "missing url" });
 

@@ -10,12 +10,21 @@ const ALLOWED = ["/player_api.php", "/xmltv.php", "/panel_api.php"];
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, x-admin-key",
 };
 
-export const onRequest = async (ctx: { request: Request }): Promise<Response> => {
-  const { request } = ctx;
+interface Env {
+  ADMIN_KEY?: string;
+}
+
+export const onRequest = async (ctx: { request: Request; env: Env }): Promise<Response> => {
+  const { request, env } = ctx;
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+
+  // Browsing the full catalogue is admin-only. The public page never calls
+  // this endpoint — it only reads /api/broadcast.
+  const key = request.headers.get("x-admin-key") ?? "";
+  if (!env.ADMIN_KEY || key !== env.ADMIN_KEY) return json({ error: "unauthorized" }, 401);
 
   const reqUrl = new URL(request.url);
   const target = reqUrl.searchParams.get("url");
