@@ -5,7 +5,7 @@
 // If ADMIN_KEY is NOT set (e.g. this preview deploy), the proxy is open so
 // the admin page can browse without extra config.
 
-const ALLOWED = ["/player_api.php", "/xmltv.php", "/panel_api.php", "/get.php"];
+const ALLOWED = ["/player_api.php", "/xmltv.php", "/panel_api.php"];
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -26,13 +26,11 @@ export default async function handler(req: any, res: any) {
   } catch {
     return res.status(400).json({ error: "bad url" });
   }
-  // DIAG: allow-all temporarily to diagnose provider reachability. REVERT after.
-  if (false && !ALLOWED.some((p) => t.pathname.endsWith(p)))
+  if (!ALLOWED.some((p) => t.pathname.endsWith(p)))
     return res.status(403).json({ error: "endpoint not allowed (metadata only)" });
 
   try {
-    const ua = (req.headers["x-ua"] as string) || "VLC/3.0.20 LibVLC/3.0.20";
-    const upstream = await fetch(t.toString(), { headers: { "User-Agent": ua } });
+    const upstream = await fetch(t.toString(), { headers: { "User-Agent": "VLC/3.0.20 LibVLC/3.0.20" } });
     const body = await upstream.text();
     res.status(upstream.status);
     res.setHeader("Content-Type", upstream.headers.get("content-type") ?? "application/json");
