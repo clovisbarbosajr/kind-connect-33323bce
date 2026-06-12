@@ -46,12 +46,13 @@ export function Player({ src, live = true, poster, title, onClose, enableSubtitl
       setTracks(list);
     };
 
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = src;
-      video.play().catch(() => {});
-      video.addEventListener("loadedmetadata", readNativeTracks);
-    } else if (Hls.isSupported()) {
-      const hls = new Hls({
+    let triedProxy = false;
+
+    // hls.js needs CORS on the manifest/segments. If the provider doesn't send
+    // it, we retry through a CORS proxy that rewrites every request URL.
+    const startHls = (useProxy: boolean) => {
+      hlsRef.current?.destroy();
+      const cfg: any = {
         enableWorker: true,
         lowLatencyMode: live,
         backBufferLength: live ? 15 : 90,
@@ -62,7 +63,18 @@ export function Player({ src, live = true, poster, title, onClose, enableSubtitl
         maxLiveSyncPlaybackRate: live ? 1.5 : 1,
         manifestLoadingTimeOut: 12000,
         fragLoadingTimeOut: 20000,
-      });
+      };
+      if (useProxy) {
+        cfg.loader = class extends (Hls.DefaultConfig.loader as any) {
+          load(context: any, config: any, callbacks: any) {
+            if (/^https?:\/\//i.test(context.url) && !context.url.includes("corsproxy.io")) {
+              context.url = `https://corsproxy.io/?url=${encodeURIComponent(context.url)}`;
+            }
+            super.load(context, config, callbacks);
+          }
+        };
+      }
+      const hls = new Hls(cfg);
       hlsRef.current = hls;
       hls.loadSource(src);
       hls.attachMedia(video);
@@ -74,18 +86,30 @@ export function Player({ src, live = true, poster, title, onClose, enableSubtitl
       }
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (!data.fatal) return;
-        switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          // First network failure (likely CORS) → retry through the proxy.
+          if (!useProxy && !triedProxy) {
+            triedProxy = true;
+            startHls(true);
+          } else {
             hls.startLoad();
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            hls.recoverMediaError();
-            break;
-          default:
-            setError("Não foi possível abrir o stream (CORS, canal offline ou formato não suportado).");
-            setLoading(false);
+          }
+        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+        } else {
+          setError("Não foi possível abrir o stream (canal offline ou formato não suportado).");
+          setLoading(false);
         }
       });
+    };
+
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Safari / iOS native HLS — plays cross-origin media without needing CORS.
+      video.src = src;
+      video.play().catch(() => {});
+      video.addEventListener("loadedmetadata", readNativeTracks);
+    } else if (Hls.isSupported()) {
+      startHls(false);
     } else {
       video.src = src;
       video.play().catch(() => setError("Navegador não suporta este stream."));
