@@ -12,180 +12,23 @@ import {
   type Series,
   type EpgEntry,
 } from "./lib/xtream";
-import { store, uid } from "./lib/store";
+import { store } from "./lib/store";
 import { Player } from "./components/Player";
-import { getNowPlaying, setNowPlaying, adminKey, type NowPlaying } from "./lib/broadcast";
+import { getNowPlaying, setNowPlaying, type NowPlaying } from "./lib/broadcast";
+import { TEST_PROVIDER } from "./lib/config";
 
 /* ============================ ADMIN ============================ */
 
 export function AdminApp() {
-  const [unlocked, setUnlocked] = useState(false);
-  const [provider, setProvider] = useState<Provider | null>(null);
-  const [providers, setProviders] = useState<Provider[]>([]);
-  const [booted, setBooted] = useState(false);
-
-  useEffect(() => {
-    setUnlocked(!!adminKey.get());
-    setProviders(store.getProviders());
-    const active = store.getActive();
-    if (active) setProvider(active);
-    setBooted(true);
-  }, []);
-
-  const onLogin = useCallback((p: Provider) => {
-    store.saveProvider(p);
-    store.setActiveId(p.id);
-    setProviders(store.getProviders());
-    setProvider(p);
-  }, []);
-
-  const onLogout = useCallback(() => {
-    store.setActiveId(null);
-    setProvider(null);
-  }, []);
-
-  if (!booted) return <div className="boot">Carregando…</div>;
-  if (!unlocked) return <AdminGate onUnlock={() => setUnlocked(true)} />;
-  if (!provider) return <Login providers={providers} onLogin={onLogin} onPickExisting={onLogin} />;
-  return <AdminDashboard provider={provider} providers={providers} onLogout={onLogout} onSwitch={onLogin} />;
-}
-
-function AdminGate({ onUnlock }: { onUnlock: () => void }) {
-  const [key, setKey] = useState("");
-  return (
-    <div className="login">
-      <div className="login-card">
-        <h1>
-          <span className="logo-dot" /> Painel Admin
-        </h1>
-        <p className="muted">Acesso restrito. Digite a chave de administrador.</p>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            adminKey.set(key.trim());
-            onUnlock();
-          }}
-        >
-          <input type="password" placeholder="Chave de admin" value={key} onChange={(e) => setKey(e.target.value)} autoFocus />
-          <button className="primary">Entrar</button>
-        </form>
-        <p className="muted small">
-          Definida na variável de ambiente <code>ADMIN_KEY</code> do deploy (em dev: "admin").
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* ----------------------------- Login (IPTV) ----------------------------- */
-
-function Login({
-  providers,
-  onLogin,
-  onPickExisting,
-}: {
-  providers: Provider[];
-  onLogin: (p: Provider) => void;
-  onPickExisting: (p: Provider) => void;
-}) {
-  const [name, setName] = useState("");
-  const [host, setHost] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [direct, setDirect] = useState(true);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setErr(null);
-    setBusy(true);
-    const p: Provider = {
-      id: uid(),
-      name: name.trim() || safeHost(host),
-      host: host.trim().replace(/\/+$/, ""),
-      username: username.trim(),
-      password: password.trim(),
-      direct,
-    };
-    try {
-      const auth = await xtream.auth(p);
-      if (!auth?.user_info || auth.user_info.auth === 0) throw new Error("Usuário ou senha inválidos.");
-      onLogin(p);
-    } catch (e: any) {
-      setErr(
-        e?.message === "UNAUTHORIZED"
-          ? "Chave de admin rejeitada pelo servidor."
-          : e?.message ?? "Falha ao conectar. Verifique a URL/credenciais.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="login">
-      <div className="login-card">
-        <h1>
-          <span className="logo-dot" /> Conectar provedor
-        </h1>
-        <p className="muted">Xtream Codes. O vídeo vai direto do provedor para o espectador — sem restream.</p>
-
-        {providers.length > 0 && (
-          <div className="profiles">
-            <span className="muted small">Perfis salvos</span>
-            <div className="profile-chips">
-              {providers.map((p) => (
-                <button key={p.id} className="chip" onClick={() => onPickExisting(p)}>
-                  {p.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <form onSubmit={submit}>
-          <input placeholder="Nome do perfil (opcional)" value={name} onChange={(e) => setName(e.target.value)} />
-          <input placeholder="URL do servidor — http://servidor.com:8080" value={host} onChange={(e) => setHost(e.target.value)} required />
-          <input placeholder="Usuário" value={username} onChange={(e) => setUsername(e.target.value)} required />
-          <input placeholder="Senha" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          <label className="check-row">
-            <input type="checkbox" checked={direct} onChange={(e) => setDirect(e.target.checked)} />
-            Conexão direta (HTTPS, sem proxy) — recomendado
-          </label>
-          {err && <div className="err">{err}</div>}
-          <button className="primary" disabled={busy}>
-            {busy ? "Conectando…" : "Entrar"}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function safeHost(h: string): string {
-  try {
-    return new URL(h).hostname;
-  } catch {
-    return "Provedor";
-  }
+  // No login, no password — straight into the dashboard with the test provider.
+  return <AdminDashboard provider={TEST_PROVIDER} />;
 }
 
 /* --------------------------- Admin Dashboard --------------------------- */
 
 type Tab = "live" | "movies" | "series" | "favorites";
 
-function AdminDashboard({
-  provider,
-  providers,
-  onLogout,
-  onSwitch,
-}: {
-  provider: Provider;
-  providers: Provider[];
-  onLogout: () => void;
-  onSwitch: (p: Provider) => void;
-}) {
+function AdminDashboard({ provider }: { provider: Provider }) {
   const [tab, setTab] = useState<Tab>("live");
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCat, setActiveCat] = useState<string>("");
@@ -280,12 +123,11 @@ function AdminDashboard({
   const toggleFav = (id: number) => setFavorites(new Set(store.toggleFavorite(id)));
 
   async function broadcast(np: NonNullable<NowPlaying>) {
-    // Optimistic: show the preview immediately so the admin can watch even if
-    // the shared-state POST isn't available (e.g. no KV on this preview host).
+    // Just set the shared "now playing" — no auto-preview, so the single
+    // provider connection stays free for the public viewer.
     setOnAir(np);
-    setPreview(true);
     const ok = await setNowPlaying(np);
-    setFlash(ok ? `No ar: ${np.title}` : `Pré-visualizando: ${np.title}`);
+    setFlash(ok ? `No ar: ${np.title}` : `Falha ao salvar — tente de novo`);
     setTimeout(() => setFlash(null), 2500);
   }
   const airLive = (s: LiveStream) =>
@@ -331,7 +173,6 @@ function AdminDashboard({
         </nav>
         <div className="topbar-right">
           <input className="search" placeholder="Buscar…" value={search} onChange={(e) => setSearch(e.target.value)} />
-          <ProfileMenu provider={provider} providers={providers} onSwitch={onSwitch} onLogout={onLogout} />
         </div>
       </header>
 
