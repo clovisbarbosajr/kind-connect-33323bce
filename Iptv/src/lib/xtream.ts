@@ -17,8 +17,9 @@ export type Provider = {
 
 // The provider is HTTP-only. An HTTPS page can't read HTTP directly (browser
 // "mixed content" rule), so in direct mode we route through a public HTTPS
-// CORS proxy that fetches the HTTP provider for us.
-const CORS_PROXY = "https://corsproxy.io/?url=";
+// CORS proxy that fetches the HTTP provider for us. (allorigins reaches the
+// provider; the provider only blocks some datacenter IPs like Vercel's.)
+const CORS_PROXY = "https://api.allorigins.win/raw?url=";
 const proxied = (url: string) => `${CORS_PROXY}${encodeURIComponent(url)}`;
 
 function base(p: Provider): string {
