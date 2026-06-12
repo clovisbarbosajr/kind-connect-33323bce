@@ -66,6 +66,20 @@ export function Player({ src, live = true, poster, title, onClose, enableSubtitl
         manifestLoadingTimeOut: 12000,
         fragLoadingTimeOut: 20000,
       };
+      // Strip #EXT-X-ENDLIST from playlists so live channels keep reloading
+      // instead of stopping after the first segment.
+      cfg.pLoader = class extends (Hls.DefaultConfig.loader as any) {
+        load(context: any, config2: any, callbacks: any) {
+          const onSuccess = callbacks.onSuccess;
+          callbacks.onSuccess = (response: any, stats: any, ctx: any, net: any) => {
+            if (response && typeof response.data === "string") {
+              response.data = response.data.replace(/#EXT-X-ENDLIST\s*/g, "");
+            }
+            onSuccess(response, stats, ctx, net);
+          };
+          super.load(context, config2, callbacks);
+        }
+      };
       if (useProxy) {
         cfg.loader = class extends (Hls.DefaultConfig.loader as any) {
           load(context: any, config: any, callbacks: any) {
@@ -112,21 +126,9 @@ export function Player({ src, live = true, poster, title, onClose, enableSubtitl
       });
     };
 
-    if (live && mpegts.isSupported()) {
-      // Live = continuous MPEG-TS (.ts) via mpegts.js — the right way to play
-      // Xtream live in a browser (the .m3u8 ships ENDLIST and stops).
-      const player = mpegts.createPlayer(
-        { type: "mpegts", isLive: true, url: src },
-        { enableWorker: true, liveBufferLatencyChasing: true, lazyLoad: false, stashInitialSize: 128 },
-      );
-      mpegtsRef.current = player;
-      player.attachMediaElement(video);
-      player.on(mpegts.Events.ERROR, () => {
-        setError("Não foi possível abrir o canal (offline ou limite de conexões).");
-        setLoading(false);
-      });
-      player.load();
-      Promise.resolve(player.play()).catch(() => {});
+    if (live && Hls.isSupported()) {
+      // Live HLS via hls.js + the ENDLIST stripper (keeps reloading as live).
+      startHls(false);
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       // Safari / iOS native HLS — plays cross-origin media without needing CORS.
       video.src = src;

@@ -29,6 +29,28 @@ export default async function handler(req: any, res: any) {
   if (false && !ALLOWED.some((p) => t.pathname.endsWith(p)))
     return res.status(403).json({ error: "endpoint not allowed (metadata only)" });
 
+  // Probe mode: fetch headers only (no body) — used to inspect continuous .ts
+  // streams without hanging.
+  if (req.query?.probe) {
+    try {
+      const up = await fetch(t.toString(), { headers: { "User-Agent": "VLC/3.0.20 LibVLC/3.0.20", Range: "bytes=0-1" } });
+      try {
+        await up.body?.cancel();
+      } catch {
+        /* ignore */
+      }
+      return res.status(200).json({
+        upstreamStatus: up.status,
+        cors: up.headers.get("access-control-allow-origin") ?? "none",
+        contentType: up.headers.get("content-type") ?? "",
+        acceptRanges: up.headers.get("accept-ranges") ?? "",
+        location: up.headers.get("location") ?? "",
+      });
+    } catch (e: any) {
+      return res.status(200).json({ probeError: e?.message ?? "error" });
+    }
+  }
+
   try {
     const upstream = await fetch(t.toString(), { headers: { "User-Agent": "VLC/3.0.20 LibVLC/3.0.20" } });
     const body = await upstream.text();
