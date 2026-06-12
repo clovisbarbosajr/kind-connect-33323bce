@@ -4,11 +4,13 @@ import {
   liveUrl,
   movieUrl,
   seriesEpisodeUrl,
+  decodeB64,
   type Provider,
   type Category,
   type LiveStream,
   type VodStream,
   type Series,
+  type EpgEntry,
 } from "./lib/xtream";
 import { store, uid } from "./lib/store";
 import { Player } from "./components/Player";
@@ -186,6 +188,8 @@ function AdminDashboard({
   const [search, setSearch] = useState("");
   const [favorites, setFavorites] = useState<Set<number>>(new Set());
   const [seriesView, setSeriesView] = useState<Series | null>(null);
+  const [liveDetail, setLiveDetail] = useState<LiveStream | null>(null);
+  const [movieDetail, setMovieDetail] = useState<VodStream | null>(null);
 
   const [onAir, setOnAir] = useState<NowPlaying>(null);
   const [preview, setPreview] = useState(false);
@@ -312,6 +316,8 @@ function AdminDashboard({
               onClick={() => {
                 setTab(t);
                 setSeriesView(null);
+                setLiveDetail(null);
+                setMovieDetail(null);
                 setSearch("");
               }}
             >
@@ -366,7 +372,15 @@ function AdminDashboard({
         {tab !== "favorites" && (
           <aside className="sidebar">
             {categories.map((c) => (
-              <button key={c.category_id} className={activeCat === c.category_id ? "active" : ""} onClick={() => setActiveCat(c.category_id)}>
+              <button
+                key={c.category_id}
+                className={activeCat === c.category_id ? "active" : ""}
+                onClick={() => {
+                  setActiveCat(c.category_id);
+                  setLiveDetail(null);
+                  setMovieDetail(null);
+                }}
+              >
                 {c.category_name}
               </button>
             ))}
@@ -374,10 +388,33 @@ function AdminDashboard({
         )}
 
         <main className="content">
-          {loading && <div className="grid-msg">Carregando…</div>}
-          {!loading && filtered.length === 0 && <div className="grid-msg">Nada encontrado.</div>}
+          {/* ---- Live channel detail (logo + EPG) ---- */}
+          {(tab === "live" || tab === "favorites") && liveDetail && (
+            <LiveDetail
+              provider={provider}
+              channel={liveDetail}
+              onAir={onAir?.url === liveUrl(provider, liveDetail.stream_id)}
+              fav={favorites.has(liveDetail.stream_id)}
+              onBack={() => setLiveDetail(null)}
+              onFav={() => toggleFav(liveDetail.stream_id)}
+              onBroadcast={() => airLive(liveDetail)}
+            />
+          )}
 
-          {!loading && (tab === "live" || tab === "favorites") && (
+          {/* ---- Movie detail (banner + description) ---- */}
+          {tab === "movies" && movieDetail && (
+            <MovieDetail
+              provider={provider}
+              movie={movieDetail}
+              onBack={() => setMovieDetail(null)}
+              onBroadcast={() => airMovie(movieDetail)}
+            />
+          )}
+
+          {loading && <div className="grid-msg">Carregando…</div>}
+          {!loading && !liveDetail && !movieDetail && filtered.length === 0 && <div className="grid-msg">Nada encontrado.</div>}
+
+          {!loading && (tab === "live" || tab === "favorites") && !liveDetail && (
             <div className="grid live-grid">
               {filtered.map((s: LiveStream) => (
                 <LiveCard
@@ -385,17 +422,17 @@ function AdminDashboard({
                   s={s}
                   fav={favorites.has(s.stream_id)}
                   onAir={onAir?.url === liveUrl(provider, s.stream_id)}
-                  onBroadcast={() => airLive(s)}
+                  onBroadcast={() => setLiveDetail(s)}
                   onFav={() => toggleFav(s.stream_id)}
                 />
               ))}
             </div>
           )}
 
-          {!loading && tab === "movies" && (
+          {!loading && tab === "movies" && !movieDetail && (
             <div className="grid poster-grid">
               {filtered.map((s: VodStream) => (
-                <PosterCard key={s.stream_id} title={s.name} img={s.stream_icon || s.cover} onClick={() => airMovie(s)} actionLabel="Transmitir" />
+                <PosterCard key={s.stream_id} title={s.name} img={s.stream_icon || s.cover} onClick={() => setMovieDetail(s)} actionLabel="Detalhes" />
               ))}
             </div>
           )}
@@ -466,6 +503,148 @@ function PosterCard({ title, img, onClick, actionLabel }: { title: string; img?:
         <span className="poster-action">{actionLabel}</span>
       </div>
       <div className="poster-title">{title}</div>
+    </div>
+  );
+}
+
+/* ------------------------- Live detail (EPG) ------------------------- */
+
+function LiveDetail({
+  provider,
+  channel,
+  onAir,
+  fav,
+  onBack,
+  onFav,
+  onBroadcast,
+}: {
+  provider: Provider;
+  channel: LiveStream;
+  onAir: boolean;
+  fav: boolean;
+  onBack: () => void;
+  onFav: () => void;
+  onBroadcast: () => void;
+}) {
+  const [epg, setEpg] = useState<EpgEntry[] | null>(null);
+
+  useEffect(() => {
+    setEpg(null);
+    xtream
+      .shortEpg(provider, channel.stream_id)
+      .then((d) => setEpg(d.epg_listings ?? []))
+      .catch(() => setEpg([]));
+  }, [provider, channel.stream_id]);
+
+  return (
+    <div className="detail">
+      <button className="back" onClick={onBack}>
+        ← Voltar
+      </button>
+      <div className="detail-head live">
+        <div className="detail-logo">
+          {channel.stream_icon ? <img src={channel.stream_icon} alt="" /> : <div className="logo-fallback big">{channel.name?.[0]}</div>}
+        </div>
+        <div className="detail-info">
+          <h2>{channel.name}</h2>
+          <div className="detail-actions">
+            <button className="primary" onClick={onBroadcast}>
+              {onAir ? "● No ar — retransmitir" : "▶ Transmitir agora"}
+            </button>
+            <button className={`ghost ${fav ? "fav-on" : ""}`} onClick={onFav}>
+              {fav ? "★ Favorito" : "☆ Favoritar"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <h3 className="epg-h">Programação</h3>
+      {epg === null && <div className="grid-msg">Carregando EPG…</div>}
+      {epg !== null && epg.length === 0 && <p className="muted">Sem EPG para este canal.</p>}
+      {epg !== null && epg.length > 0 && (
+        <ul className="epg-list">
+          {epg.slice(0, 8).map((e, i) => (
+            <li key={i} className={i === 0 ? "now" : ""}>
+              <span className="epg-time">
+                {fmtTime(e.start)} – {fmtTime(e.end)}
+              </span>
+              <span className="epg-prog">
+                <strong>{decodeB64(e.title)}</strong>
+                {i === 0 && <span className="badge-now">AGORA</span>}
+                {decodeB64(e.description) && <span className="epg-desc">{decodeB64(e.description)}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function fmtTime(s: string): string {
+  return s?.split(" ")[1]?.slice(0, 5) ?? "";
+}
+
+/* ------------------------- Movie detail (banner) ------------------------- */
+
+function MovieDetail({
+  provider,
+  movie,
+  onBack,
+  onBroadcast,
+}: {
+  provider: Provider;
+  movie: VodStream;
+  onBack: () => void;
+  onBroadcast: () => void;
+}) {
+  const [info, setInfo] = useState<any | null>(null);
+
+  useEffect(() => {
+    setInfo(null);
+    xtream
+      .vodInfo(provider, movie.stream_id)
+      .then((d) => setInfo(d?.info ?? {}))
+      .catch(() => setInfo({}));
+  }, [provider, movie.stream_id]);
+
+  const backdrop = (Array.isArray(info?.backdrop_path) ? info.backdrop_path[0] : info?.backdrop_path) || info?.movie_image || movie.stream_icon || movie.cover;
+  const poster = info?.movie_image || movie.stream_icon || movie.cover;
+  const year = (info?.releasedate || info?.release_date || "").toString().slice(0, 4);
+
+  return (
+    <div className="detail">
+      <button className="back" onClick={onBack}>
+        ← Voltar
+      </button>
+      <div className="movie-banner">
+        {backdrop && <img className="movie-backdrop" src={backdrop} alt="" />}
+        <div className="movie-banner-shade" />
+        <div className="movie-banner-content">
+          {poster && <img className="movie-poster" src={poster} alt="" />}
+          <div className="movie-meta">
+            <h2>{movie.name}</h2>
+            <div className="movie-tags">
+              {year && <span>{year}</span>}
+              {info?.genre && <span>{info.genre}</span>}
+              {info?.duration && <span>{info.duration}</span>}
+              {(info?.rating || movie.rating) && <span>★ {info?.rating || movie.rating}</span>}
+            </div>
+            {info === null ? (
+              <p className="muted">Carregando informações…</p>
+            ) : (
+              <p className="movie-plot">{info?.plot || info?.description || "Sem descrição disponível."}</p>
+            )}
+            {info?.cast && <p className="muted small">Elenco: {info.cast}</p>}
+            {info?.director && <p className="muted small">Direção: {info.director}</p>}
+            <div className="detail-actions">
+              <button className="primary" onClick={onBroadcast}>
+                ▶ Transmitir agora
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
