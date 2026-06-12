@@ -5,7 +5,7 @@
 // If ADMIN_KEY is NOT set (e.g. this preview deploy), the proxy is open so
 // the admin page can browse without extra config.
 
-const ALLOWED = ["/player_api.php", "/xmltv.php", "/panel_api.php"];
+const ALLOWED = ["/player_api.php", "/xmltv.php", "/panel_api.php", "/get.php"];
 
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -30,7 +30,8 @@ export default async function handler(req: any, res: any) {
     return res.status(403).json({ error: "endpoint not allowed (metadata only)" });
 
   try {
-    const upstream = await fetch(t.toString(), { headers: { "User-Agent": "IPTVSmarters/1.0" } });
+    const ua = (req.headers["x-ua"] as string) || "VLC/3.0.20 LibVLC/3.0.20";
+    const upstream = await fetch(t.toString(), { headers: { "User-Agent": ua } });
     const body = await upstream.text();
     res.status(upstream.status);
     res.setHeader("Content-Type", upstream.headers.get("content-type") ?? "application/json");
