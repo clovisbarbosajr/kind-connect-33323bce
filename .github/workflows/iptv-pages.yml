@@ -2,7 +2,7 @@ name: Deploy IPTV to Pages
 
 on:
   push:
-    branches: [claude/personal-iptv-player-vxw08x]
+    branches: [main, claude/personal-iptv-player-vxw08x]
   workflow_dispatch:
 
 permissions:
