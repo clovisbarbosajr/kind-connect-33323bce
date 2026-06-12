@@ -34,6 +34,7 @@ export default async function handler(req: any, res: any) {
     const body = await upstream.text();
     res.status(upstream.status);
     res.setHeader("Content-Type", upstream.headers.get("content-type") ?? "application/json");
+    res.setHeader("x-upstream-cors", upstream.headers.get("access-control-allow-origin") ?? "none");
     return res.send(body);
   } catch (e: any) {
     return res.status(502).json({ error: e?.message ?? "upstream error" });
