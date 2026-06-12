@@ -127,8 +127,9 @@ export function Player({ src, live = true, poster, title, onClose, enableSubtitl
     };
 
     if (live && Hls.isSupported()) {
-      // Live HLS via hls.js + the ENDLIST stripper (keeps reloading as live).
-      startHls(false);
+      // Live: manifest is CORS-enabled but the .ts segments are not, so route
+      // segments through the CORS proxy from the start (+ ENDLIST stripper).
+      startHls(true);
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       // Safari / iOS native HLS — plays cross-origin media without needing CORS.
       video.src = src;
