@@ -146,7 +146,9 @@ export const xtream = {
 };
 
 // ---- Stream URLs — direct from the HTTPS provider (plays natively) ----
-export const liveUrl = (p: Provider, streamId: number, ext = "m3u8") =>
+// Live uses the continuous MPEG-TS (.ts) endpoint, played with mpegts.js
+// (the .m3u8 variant ships #EXT-X-ENDLIST and stops after one segment).
+export const liveUrl = (p: Provider, streamId: number, ext = "ts") =>
   `${base(p)}/live/${p.username}/${p.password}/${streamId}.${ext}`;
 
 export const movieUrl = (p: Provider, streamId: number, ext: string) =>
