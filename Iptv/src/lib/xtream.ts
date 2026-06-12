@@ -15,12 +15,13 @@ export type Provider = {
   direct?: boolean; // talk straight to the provider over HTTPS (no proxy)
 };
 
-// The provider is HTTP-only. An HTTPS page can't read HTTP directly (browser
-// "mixed content" rule), so in direct mode we route through a public HTTPS
-// CORS proxy that fetches the HTTP provider for us. (allorigins reaches the
-// provider; the provider only blocks some datacenter IPs like Vercel's.)
-const CORS_PROXY = "https://api.allorigins.win/raw?url=";
-const proxied = (url: string) => `${CORS_PROXY}${encodeURIComponent(url)}`;
+// Direct mode hits the HTTPS provider straight from the browser. If the
+// provider doesn't send CORS headers, we retry through a public HTTPS CORS
+// proxy (corsproxy is fast; allorigins is the backup).
+const PROXIES = [
+  (u: string) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+  (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+];
 
 function base(p: Provider): string {
   let h = p.host.trim().replace(/\/+$/, "");
@@ -67,24 +68,15 @@ export type EpgEntry = {
   stop_timestamp: string;
 };
 
-function endpoint(p: Provider, params: Record<string, string>): string {
+function apiUrl(p: Provider, params: Record<string, string>): string {
   const u = new URL(`${base(p)}/player_api.php`);
   u.searchParams.set("username", p.username);
   u.searchParams.set("password", p.password);
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
-  // Direct: route the HTTP provider through the HTTPS CORS proxy. Otherwise our own proxy.
-  if (p.direct) return proxied(u.toString());
-  return `/api/xtream?url=${encodeURIComponent(u.toString())}`;
+  return u.toString();
 }
 
-async function call<T>(p: Provider, params: Record<string, string>): Promise<T> {
-  let key = "";
-  try {
-    key = sessionStorage.getItem("iptv.adminKey") ?? "";
-  } catch {
-    /* ignore */
-  }
-  const res = await fetch(endpoint(p, params), { headers: p.direct ? {} : { "x-admin-key": key } });
+async function parse<T>(res: Response): Promise<T> {
   if (res.status === 401) throw new Error("UNAUTHORIZED");
   if (!res.ok) throw new Error(`Xtream HTTP ${res.status}`);
   const text = await res.text();
@@ -93,6 +85,36 @@ async function call<T>(p: Provider, params: Record<string, string>): Promise<T> 
   } catch {
     throw new Error("Resposta inválida do provedor");
   }
+}
+
+async function call<T>(p: Provider, params: Record<string, string>): Promise<T> {
+  const raw = apiUrl(p, params);
+  if (!p.direct) {
+    let key = "";
+    try {
+      key = sessionStorage.getItem("iptv.adminKey") ?? "";
+    } catch {
+      /* ignore */
+    }
+    return parse<T>(await fetch(`/api/xtream?url=${encodeURIComponent(raw)}`, { headers: { "x-admin-key": key } }));
+  }
+  // Direct (HTTPS provider): try straight from the browser; if CORS/network
+  // blocks it, retry through each public CORS proxy until one works.
+  try {
+    const res = await fetch(raw);
+    if (res.ok) return await parse<T>(res);
+  } catch {
+    /* fall through to proxies */
+  }
+  for (const wrap of PROXIES) {
+    try {
+      const res = await fetch(wrap(raw));
+      if (res.ok) return await parse<T>(res);
+    } catch {
+      /* try next proxy */
+    }
+  }
+  throw new Error("Não foi possível carregar (CORS/proxy).");
 }
 
 export const xtream = {
@@ -123,21 +145,15 @@ export const xtream = {
     }),
 };
 
-// ---- Stream URLs (routed through the HTTPS proxy in direct mode) ----
-export const liveUrl = (p: Provider, streamId: number, ext = "m3u8") => {
-  const u = `${base(p)}/live/${p.username}/${p.password}/${streamId}.${ext}`;
-  return p.direct ? proxied(u) : u;
-};
+// ---- Stream URLs — direct from the HTTPS provider (plays natively) ----
+export const liveUrl = (p: Provider, streamId: number, ext = "m3u8") =>
+  `${base(p)}/live/${p.username}/${p.password}/${streamId}.${ext}`;
 
-export const movieUrl = (p: Provider, streamId: number, ext: string) => {
-  const u = `${base(p)}/movie/${p.username}/${p.password}/${streamId}.${ext}`;
-  return p.direct ? proxied(u) : u;
-};
+export const movieUrl = (p: Provider, streamId: number, ext: string) =>
+  `${base(p)}/movie/${p.username}/${p.password}/${streamId}.${ext}`;
 
-export const seriesEpisodeUrl = (p: Provider, episodeId: string | number, ext: string) => {
-  const u = `${base(p)}/series/${p.username}/${p.password}/${episodeId}.${ext}`;
-  return p.direct ? proxied(u) : u;
-};
+export const seriesEpisodeUrl = (p: Provider, episodeId: string | number, ext: string) =>
+  `${base(p)}/series/${p.username}/${p.password}/${episodeId}.${ext}`;
 
 // EPG titles/descriptions come base64-encoded.
 export const decodeB64 = (s?: string): string => {

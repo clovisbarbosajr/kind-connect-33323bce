@@ -3,11 +3,11 @@ import type { Provider } from "./xtream";
 // TEST setup — hardcoded so there's nothing to type. Direct mode (browser ->
 // provider over HTTPS, no proxy).
 export const TEST_PROVIDER: Provider = {
-  id: "monte26",
+  id: "kakito",
   name: "Teste",
-  host: "monte26.com",
-  username: "q2jmc5",
-  password: "n5qeth",
+  host: "https://kakito.xyz",
+  username: "clovisteste1",
+  password: "gpuiyt21",
   direct: true,
 };
 
