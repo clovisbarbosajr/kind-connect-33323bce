@@ -1,0 +1,6 @@
+{
+  "installCommand": "cd Iptv && npm install",
+  "buildCommand": "cd Iptv && npm run build",
+  "outputDirectory": "Iptv/dist",
+  "framework": null
+}
