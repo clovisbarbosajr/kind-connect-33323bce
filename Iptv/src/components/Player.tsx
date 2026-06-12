@@ -86,9 +86,16 @@ export function Player({ src, live = true, poster, title, onClose, enableSubtitl
       }
       hls.on(Hls.Events.ERROR, (_e, data) => {
         if (!data.fatal) return;
+        const d = data.details;
+        const manifestFailed =
+          d === Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
+          d === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT ||
+          d === Hls.ErrorDetails.MANIFEST_PARSING_ERROR;
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          // First network failure (likely CORS) → retry through the proxy.
-          if (!useProxy && !triedProxy) {
+          // Only switch to the proxy when the manifest itself can't load (the
+          // true CORS signal). Don't break a working stream on a transient
+          // segment hiccup — just keep loading.
+          if (manifestFailed && !useProxy && !triedProxy) {
             triedProxy = true;
             startHls(true);
           } else {
